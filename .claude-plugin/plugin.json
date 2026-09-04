@@ -1,0 +1,9 @@
+{
+  "name": "claude-adhd",
+  "version": "0.1.0",
+  "description": "Gentle reminders for unfinished threads from past sessions — built for ADHD brains. Session-start digest, random nudges when the chat drifts, and /remind-me on demand.",
+  "author": {
+    "name": "shaheer"
+  },
+  "keywords": ["adhd", "memory", "reminders", "productivity"]
+}

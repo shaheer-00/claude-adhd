@@ -1,0 +1,13 @@
+{
+  "name": "claude-adhd",
+  "owner": {
+    "name": "shaheer"
+  },
+  "plugins": [
+    {
+      "name": "claude-adhd",
+      "source": "./",
+      "description": "Gentle reminders for unfinished threads from past sessions — built for ADHD brains."
+    }
+  ]
+}

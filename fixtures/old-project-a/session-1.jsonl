@@ -1,0 +1,6 @@
+{"type":"user","message":{"role":"user","content":"hey, I'll add tests to the auth module later, remind me"},"timestamp":"2026-08-25T10:00:00.000Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Noted."}]}}
+{"type":"user","message":{"role":"user","content":"also we should refactor the database layer before adding new endpoints"},"timestamp":"2026-08-25T10:05:00.000Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","name":"Edit","input":{}}]}}
+{"type":"user","message":{"role":"user","content":"what if we tried caching the search results too?"},"timestamp":"2026-08-25T10:10:00.000Z"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Could work."}]}}
