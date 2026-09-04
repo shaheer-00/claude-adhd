@@ -13,6 +13,7 @@
 //   GET  /api/state   full state JSON (items, projects, stats, claude-mem)
 //   POST /api/mark    { id, status: done|dismissed|open }
 //   POST /api/add     { summary, project }
+//   POST /api/update  { id, summary }
 //
 // Env overrides (for tests): ADHD_DIR, ADHD_PROJECTS_DIR, CLAUDE_MEM_DB,
 // ADHD_PORT.
@@ -22,7 +23,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { loadConfig, loadIndex, markStatus, addItem, itemProject } from './lib/store.mjs';
+import { loadConfig, loadIndex, markStatus, addItem, itemProject, updateItem } from './lib/store.mjs';
 import { readClaudeMem } from './lib/clademem.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -153,6 +154,18 @@ export function startServer(portOverride) {
       });
       if (!item) return send(res, 409, JSON.stringify({ error: 'duplicate or empty' }));
       return send(res, 200, JSON.stringify({ ok: true, id: item.id }));
+    }
+
+    if (url === '/api/update' && req.method === 'POST') {
+      const body = await readBody(req);
+      if (!body?.id || !body?.summary) {
+        return send(res, 400, JSON.stringify({ error: 'need id and summary' }));
+      }
+      const idx = loadIndex();
+      if (!updateItem(idx, body.id, { summary: body.summary })) {
+        return send(res, 404, JSON.stringify({ error: 'no such item or empty summary' }));
+      }
+      return send(res, 200, JSON.stringify({ ok: true }));
     }
 
     if (url === '/' || url === '/index.html') {

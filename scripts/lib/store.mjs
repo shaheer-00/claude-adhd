@@ -145,6 +145,18 @@ export function markStatus(idx, id, status, now = Date.now()) {
   return true;
 }
 
+// Edit an item's summary (dashboard inline edit).
+export function updateItem(idx, id, { summary }, now = Date.now()) {
+  const it = idx.items.find((i) => i.id === id);
+  if (!it) return false;
+  const clean = String(summary).replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (!clean) return false;
+  it.summary = clean;
+  it.editedAt = now;
+  saveIndex(idx);
+  return true;
+}
+
 // ---------- per-session nudge state ----------
 
 function stateFile() {

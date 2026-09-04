@@ -4,135 +4,422 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Claude ADHD</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230a0c11'/%3E%3Ccircle cx='16' cy='16' r='9' fill='none' stroke='%235b8cff' stroke-width='2.5'/%3E%3Cpath d='M8 20 Q16 14 24 20' fill='none' stroke='%235b8cff' stroke-width='2.5' stroke-linecap='round'/%3E%3C/svg%3E">
 <style>
+  /* ============ tokens ============
+     Radius system (locked): cards 14px, buttons/inputs 9px, chips pill. */
   :root {
-    --bg: #0f1115; --panel: #171a21; --panel2: #1e222b;
-    --border: #2a2f3a; --text: #e7eaf0; --muted: #8b93a3;
-    --accent: #6c8cff; --accent2: #8f6cff;
-    --open: #e8b34b; --done: #4cc38a; --dismissed: #6b7280;
+    --bg: #0a0c11;
+    --panel: rgba(255,255,255,.026);
+    --panel-hover: rgba(255,255,255,.05);
+    --panel-solid: #12151d;
+    --border: rgba(255,255,255,.07);
+    --border-hover: rgba(255,255,255,.14);
+    --text: #e8ebf2;
+    --muted: #9aa3b5;
+    --faint: #5c6577;
+    --accent: #5b8cff;
+    --accent-soft: rgba(91,140,255,.13);
+    --open: #e6b450;
+    --done: #3ecf8e;
+    --done-soft: rgba(62,207,142,.13);
+    --dismissed: #6b7280;
+    --danger: #ff6b6b;
+    --danger-soft: rgba(255,107,107,.12);
+    --shadow: 0 8px 32px rgba(0,0,0,.35);
+    --ease: cubic-bezier(.16,1,.3,1);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { color-scheme: dark; }
   body {
-    background: var(--bg); color: var(--text);
-    font: 14px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif;
-    padding: 20px; max-width: 1200px; margin: 0 auto;
+    background:
+      radial-gradient(900px 500px at 85% -10%, rgba(91,140,255,.07), transparent 60%),
+      radial-gradient(700px 400px at -10% 110%, rgba(62,207,142,.04), transparent 60%),
+      var(--bg);
+    color: var(--text);
+    font: 14px/1.55 -apple-system, "Segoe UI Variable", "Segoe UI", Roboto, sans-serif;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
   }
-  header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
-  header h1 { font-size: 20px; font-weight: 700; }
-  header .live { color: var(--done); font-size: 12px; }
-  header .live.off { color: var(--muted); }
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 18px; }
-  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
-  .card .num { font-size: 28px; font-weight: 700; }
-  .card .lbl { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+  .wrap { max-width: 1200px; margin: 0 auto; padding: 24px 20px 60px; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ============ header ============ */
+  header { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; flex-wrap: wrap; }
+  .logo {
+    width: 34px; height: 34px; border-radius: 10px; flex-shrink: 0;
+    display: grid; place-items: center;
+    background: linear-gradient(135deg, rgba(91,140,255,.22), rgba(91,140,255,.06));
+    border: 1px solid rgba(91,140,255,.3);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.12);
+  }
+  .logo svg { display: block; }
+  header h1 { font-size: 17px; font-weight: 650; letter-spacing: -.01em; }
+  .live { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+  .live .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--done); position: relative; }
+  .live .dot::after {
+    content: ""; position: absolute; inset: -3px; border-radius: 50%;
+    border: 1.5px solid var(--done); opacity: 0;
+    animation: ping 2.4s var(--ease) infinite;
+  }
+  @keyframes ping { 0% { transform: scale(.5); opacity: .8; } 70%, 100% { transform: scale(1.5); opacity: 0; } }
+  .live.off .dot { background: var(--faint); }
+  .live.off .dot::after { animation: none; }
+  .sync { font-size: 11.5px; color: var(--faint); margin-left: auto; }
+
+  /* ============ stats ============ */
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 16px 16px 14px; position: relative; overflow: hidden;
+    transition: border-color .3s var(--ease), transform .3s var(--ease), background .3s var(--ease);
+    animation: fadeUp .5s var(--ease) backwards;
+  }
+  .card:nth-child(2) { animation-delay: .05s; } .card:nth-child(3) { animation-delay: .1s; }
+  .card:nth-child(4) { animation-delay: .15s; } .card:nth-child(5) { animation-delay: .2s; }
+  .card:hover { border-color: var(--border-hover); background: var(--panel-hover); transform: translateY(-2px); }
+  .card::before {
+    content: ""; position: absolute; inset: 0 0 auto; height: 2px; opacity: 0;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    transition: opacity .3s var(--ease);
+  }
+  .card:hover::before { opacity: 1; }
+  .card .num { font-size: 27px; font-weight: 700; letter-spacing: -.02em; }
+  .card .lbl { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .07em; margin-top: 2px; }
   .card.open .num { color: var(--open); }
   .card.done .num { color: var(--done); }
-  .layout { display: grid; grid-template-columns: 220px 1fr; gap: 14px; }
-  .side { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px; align-self: start; }
-  .side h2, .main h2 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 6px 6px 8px; }
-  .proj { padding: 7px 10px; border-radius: 7px; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; align-items: center; }
-  .proj:hover { background: var(--panel2); }
-  .proj.active { background: var(--panel2); outline: 1px solid var(--accent); }
-  .proj .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .proj .cnt { color: var(--open); font-size: 12px; flex-shrink: 0; }
-  .proj .cnt.zero { color: var(--done); }
+  .card.accent .num { color: var(--accent); }
+
+  /* ============ layout ============ */
+  .layout { display: grid; grid-template-columns: 232px 1fr; gap: 14px; align-items: start; }
+  .side { position: sticky; top: 20px; display: flex; flex-direction: column; gap: 12px; }
+  .panel {
+    background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
+    padding: 16px;
+    animation: fadeUp .55s var(--ease) .12s backwards;
+  }
   .main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
-  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
-  .item { display: flex; gap: 10px; align-items: flex-start; padding: 9px 6px; border-bottom: 1px solid var(--border); }
-  .item:last-child { border-bottom: none; }
-  .item .age { color: var(--muted); font-size: 12px; flex-shrink: 0; width: 86px; padding-top: 2px; }
-  .item .sum { flex: 1; min-width: 0; overflow-wrap: break-word; }
-  .item.done .sum { color: var(--muted); text-decoration: line-through; }
-  .item .src { font-size: 10px; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; margin-left: 6px; vertical-align: 2px; }
-  .btns { display: flex; gap: 6px; flex-shrink: 0; }
-  .btns button {
-    background: var(--panel2); color: var(--text); border: 1px solid var(--border);
-    border-radius: 6px; padding: 3px 9px; font-size: 12px; cursor: pointer;
+  .main > .panel { animation-delay: .18s; }
+  h2 {
+    font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em;
+    margin: 0 0 10px; font-weight: 600;
   }
-  .btns button:hover { border-color: var(--accent); }
-  .btns button.ok:hover { border-color: var(--done); color: var(--done); }
-  .btns button.no:hover { border-color: var(--dismissed); color: var(--dismissed); }
-  .charts { display: grid; grid-template-columns: 1fr 220px; gap: 14px; }
+  @keyframes fadeUp { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: none; } }
+
+  /* ============ sidebar ============ */
+  .proj {
+    padding: 7px 10px; border-radius: 9px; cursor: pointer; display: flex; gap: 8px;
+    justify-content: space-between; align-items: center; font-size: 13px;
+    transition: background .2s var(--ease), outline-color .2s var(--ease);
+    outline: 1px solid transparent;
+  }
+  .proj:hover { background: var(--panel-hover); }
+  .proj.active { background: var(--accent-soft); outline-color: rgba(91,140,255,.4); }
+  .proj .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .proj .cnt { font-size: 11px; color: var(--open); flex-shrink: 0; font-variant-numeric: tabular-nums; }
+  .proj .cnt.zero { color: var(--done); }
+  .proj-all { color: var(--muted); }
+  .proj-all.active { color: var(--text); }
+  .cm-note { color: var(--faint); font-size: 11.5px; padding: 2px 10px 8px; }
+
+  /* ============ toolbar ============ */
+  .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
+  .search { position: relative; flex: 1; min-width: 200px; max-width: 380px; }
+  .search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); pointer-events: none; }
+  .search input {
+    width: 100%; background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    border-radius: 9px; padding: 8px 12px 8px 34px; font: inherit; outline: none;
+    transition: border-color .25s var(--ease), background .25s var(--ease), box-shadow .25s var(--ease);
+  }
+  .search input::placeholder { color: var(--faint); }
+  .search input:focus {
+    border-color: rgba(91,140,255,.55); background: var(--panel-hover);
+    box-shadow: 0 0 0 3px rgba(91,140,255,.12);
+  }
+  .search kbd {
+    position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
+    font: 10px/1 var(--muted); border: 1px solid var(--border); border-radius: 5px; padding: 3px 5px;
+    color: var(--faint); background: var(--panel); pointer-events: none;
+  }
+  .chips { display: flex; gap: 6px; }
+  .chip {
+    border: 1px solid var(--border); background: var(--panel); color: var(--muted);
+    border-radius: 999px; padding: 6px 13px; font: 12.5px inherit; cursor: pointer;
+    transition: all .2s var(--ease); font-family: inherit;
+  }
+  .chip:hover { border-color: var(--border-hover); color: var(--text); }
+  .chip.active { background: var(--accent-soft); border-color: rgba(91,140,255,.45); color: #a8c0ff; }
+  .chip .n { font-variant-numeric: tabular-nums; opacity: .7; margin-left: 2px; }
+  select {
+    background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 9px; padding: 7px 10px; font: 12.5px inherit; cursor: pointer; outline: none;
+    transition: border-color .2s var(--ease); font-family: inherit;
+  }
+  select:hover { border-color: var(--border-hover); color: var(--text); }
+
+  /* ============ charts ============ */
+  .charts { display: grid; grid-template-columns: 1fr 260px; gap: 14px; }
+  .chart-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px; }
   .chart-panel svg { width: 100%; height: auto; display: block; }
-  .chart-title { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
-  .cm-note { color: var(--muted); font-size: 12px; padding: 4px 6px; }
-  .cm-threads .item .sum { color: var(--text); }
-  .empty { color: var(--muted); padding: 14px 6px; text-align: center; }
-  .addrow { display: flex; gap: 8px; margin-top: 10px; }
+  .bars rect { transform-origin: bottom; transform: scaleY(0); transition: transform .7s var(--ease); }
+  .bars.rendered rect { transform: scaleY(1); }
+  .legend { display: flex; gap: 14px; font-size: 11px; color: var(--muted); margin-top: 8px; }
+  .legend .sw { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
+  .donut-wrap { display: flex; gap: 14px; align-items: center; }
+  .donut-wrap svg { flex-shrink: 0; animation: popIn .6s var(--ease); }
+  @keyframes popIn { from { opacity: 0; transform: scale(.88); } to { opacity: 1; transform: none; } }
+
+  /* ============ items ============ */
+  .item {
+    border-radius: 9px; padding: 10px 12px; margin-bottom: 4px; cursor: pointer;
+    display: flex; gap: 12px; align-items: flex-start; position: relative;
+    border: 1px solid transparent;
+    transition: background .2s var(--ease), border-color .2s var(--ease), transform .2s var(--ease);
+  }
+  .item:hover { background: var(--panel-hover); border-color: var(--border); }
+  .item.entering { animation: fadeUp .45s var(--ease) backwards; }
+  .item::before {
+    content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px;
+    border-radius: 3px; background: var(--open); opacity: .8;
+  }
+  .item.done::before { background: var(--done); opacity: .5; }
+  .item .age { color: var(--faint); font-size: 11.5px; flex-shrink: 0; width: 84px; padding-top: 2px; }
+  .item .sum { flex: 1; min-width: 0; overflow-wrap: break-word; }
+  .item.done .sum { color: var(--muted); }
+  .item.done .sum .txt { text-decoration: line-through; text-decoration-color: rgba(154,163,181,.6); }
+  .tag {
+    font-size: 10px; color: var(--muted); border: 1px solid var(--border); border-radius: 5px;
+    padding: 1px 6px; margin-left: 7px; vertical-align: 2px; white-space: nowrap;
+  }
+  .item .proj-tag { color: var(--faint); }
+  .btns { display: flex; gap: 6px; flex-shrink: 0; }
+  .btns button, .mini-btn {
+    background: var(--panel); color: var(--muted); border: 1px solid var(--border);
+    border-radius: 8px; padding: 4px 10px; font-size: 12px; cursor: pointer;
+    transition: all .18s var(--ease); font-family: inherit; line-height: 1.4;
+  }
+  .btns button:hover { border-color: var(--border-hover); color: var(--text); transform: translateY(-1px); }
+  .btns button:active { transform: translateY(0) scale(.96); }
+  .btns button.ok:hover { border-color: var(--done); color: var(--done); background: var(--done-soft); }
+  .btns button.no:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
+  .btns button.confirm { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); animation: pulseWarn 1s var(--ease) infinite; }
+  @keyframes pulseWarn { 50% { box-shadow: 0 0 0 4px rgba(255,107,107,.15); } }
+  .item.done .btns button.rev:hover { border-color: var(--accent); color: var(--accent); }
+
+  /* expanded detail */
+  .detail {
+    display: grid; grid-template-rows: 0fr; transition: grid-template-rows .35s var(--ease), visibility .35s;
+    border-radius: 9px; margin: 0 12px 4px; overflow: hidden; visibility: hidden;
+  }
+  .item-row-wrap.expanded .detail { grid-template-rows: 1fr; visibility: visible; }
+  .detail-inner { overflow: hidden; }
+  .detail-body {
+    padding: 12px 14px; margin-top: 2px; border: 1px solid var(--border);
+    border-radius: 9px; background: var(--panel);
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .editrow { display: flex; gap: 8px; }
+  .editrow input {
+    flex: 1; background: var(--panel-solid); border: 1px solid var(--border); color: var(--text);
+    border-radius: 8px; padding: 7px 10px; font: inherit; outline: none;
+    transition: border-color .2s var(--ease);
+  }
+  .editrow input:focus { border-color: rgba(91,140,255,.55); }
+  .mini-btn.primary { background: var(--accent-soft); border-color: rgba(91,140,255,.4); color: #a8c0ff; }
+  .mini-btn.primary:hover { color: var(--text); border-color: rgba(91,140,255,.7); }
+  .meta { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 11.5px; color: var(--muted); }
+  .meta b { color: var(--faint); font-weight: 600; text-transform: uppercase; font-size: 10px; letter-spacing: .06em; margin-right: 4px; }
+  .meta .mono { font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; font-size: 11px; color: var(--faint); }
+
+  /* ============ empty + add ============ */
+  .empty { color: var(--muted); padding: 30px 10px; text-align: center; }
+  .empty .big { font-size: 15px; color: var(--text); font-weight: 600; margin-bottom: 4px; }
+  .empty .sub { font-size: 12.5px; color: var(--faint); }
+  .empty svg { opacity: .35; margin-bottom: 10px; animation: float 4s ease-in-out infinite; }
+  @keyframes float { 50% { transform: translateY(-5px); } }
+  .addrow { display: flex; gap: 8px; margin-top: 12px; }
   .addrow input {
-    flex: 1; background: var(--panel2); border: 1px solid var(--border); color: var(--text);
-    border-radius: 7px; padding: 7px 10px; font: inherit;
+    flex: 1; background: var(--panel-solid); border: 1px solid var(--border); color: var(--text);
+    border-radius: 9px; padding: 9px 12px; font: inherit; outline: none;
+    transition: border-color .25s var(--ease), box-shadow .25s var(--ease);
   }
+  .addrow input::placeholder { color: var(--faint); }
+  .addrow input:focus { border-color: rgba(91,140,255,.55); box-shadow: 0 0 0 3px rgba(91,140,255,.12); }
   .addrow button {
-    background: var(--accent); color: #fff; border: none; border-radius: 7px; padding: 7px 14px; cursor: pointer; font: inherit;
+    background: var(--accent); color: #fff; border: none; border-radius: 9px;
+    padding: 9px 18px; cursor: pointer; font: 600 13px inherit; font-family: inherit;
+    transition: all .2s var(--ease); box-shadow: 0 2px 12px rgba(91,140,255,.25);
   }
-  @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } .charts { grid-template-columns: 1fr; } }
+  .addrow button:hover { filter: brightness(1.12); transform: translateY(-1px); box-shadow: 0 4px 16px rgba(91,140,255,.35); }
+  .addrow button:active { transform: translateY(0) scale(.97); }
+
+  /* ============ claude-mem ============ */
+  .cm-threads h3 { font-size: 13px; font-weight: 600; margin: 14px 4px 6px; display: flex; align-items: baseline; gap: 8px; }
+  .cm-threads h3 .when { font-size: 11px; color: var(--faint); font-weight: 400; }
+  .cm-threads .item { cursor: default; }
+  .cm-threads .item:hover { background: transparent; }
+  .cm-threads .item .sum { color: var(--text); }
+
+  /* ============ toasts ============ */
+  .toasts { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 50; }
+  .toast {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--panel-solid); border: 1px solid var(--border-hover); border-radius: 11px;
+    padding: 11px 14px; font-size: 13px; box-shadow: var(--shadow);
+    animation: toastIn .4s var(--ease); max-width: 340px;
+  }
+  .toast.leaving { animation: toastOut .3s var(--ease) forwards; }
+  @keyframes toastIn { from { opacity: 0; transform: translateX(30px) scale(.95); } to { opacity: 1; transform: none; } }
+  @keyframes toastOut { to { opacity: 0; transform: translateX(30px) scale(.95); } }
+  .toast .ic { flex-shrink: 0; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 7px; }
+  .toast .ic.ok { background: var(--done-soft); color: var(--done); }
+  .toast .ic.warn { background: var(--danger-soft); color: var(--danger); }
+  .toast .undo {
+    background: none; border: 1px solid var(--border); color: var(--accent); border-radius: 7px;
+    padding: 4px 10px; cursor: pointer; font: 600 12px inherit; font-family: inherit; margin-left: 4px;
+    transition: all .18s var(--ease);
+  }
+  .toast .undo:hover { border-color: rgba(91,140,255,.5); background: var(--accent-soft); }
+
+  /* ============ skeleton ============ */
+  .skel { border-radius: 9px; height: 38px; margin-bottom: 6px; background: var(--panel); position: relative; overflow: hidden; }
+  .skel::after {
+    content: ""; position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,.045), transparent);
+    animation: shimmer 1.4s infinite;
+  }
+  @keyframes shimmer { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+
+  /* ============ misc ============ */
+  .hidden { display: none !important; }
+  .result-count { font-size: 12px; color: var(--faint); margin-left: auto; }
+  .cm-threads .item .sum { color: var(--text); }
+
+  @media (max-width: 800px) {
+    .layout { grid-template-columns: 1fr; }
+    .side { position: static; }
+    .charts { grid-template-columns: 1fr; }
+    .sync { width: 100%; margin-left: 0; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  }
 </style>
 </head>
 <body>
-<header>
-  <h1>🧠 Claude ADHD</h1>
-  <span class="live" id="live">● live</span>
-  <span style="color:var(--muted);font-size:12px" id="curproj"></span>
-</header>
+<div class="wrap">
 
-<div class="stats">
-  <div class="card open"><div class="num" id="s-open">–</div><div class="lbl">Open</div></div>
-  <div class="card done"><div class="num" id="s-done">–</div><div class="lbl">Finished</div></div>
-  <div class="card"><div class="num" id="s-pct">–</div><div class="lbl">Finished %</div></div>
-  <div class="card done"><div class="num" id="s-today">–</div><div class="lbl">Done today</div></div>
-  <div class="card"><div class="num" id="s-total">–</div><div class="lbl">Tracked total</div></div>
-</div>
+  <header>
+    <div class="logo" aria-hidden="true">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="8" stroke="#5b8cff" stroke-width="2"/>
+        <path d="M4.5 15.5 Q12 10.5 19.5 15.5" stroke="#5b8cff" stroke-width="2" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <h1>Claude ADHD</h1>
+    <span class="live" id="live"><span class="dot"></span><span id="live-txt">connecting</span></span>
+    <span class="sync num" id="sync"></span>
+  </header>
 
-<div class="layout">
-  <div class="side">
-    <h2>Projects</h2>
-    <div id="projects"></div>
-    <h2 style="margin-top:14px">claude-mem</h2>
-    <div class="cm-note" id="cm-note">…</div>
-    <div id="cm-projects"></div>
+  <div class="stats">
+    <div class="card open"><div class="num" id="s-open">–</div><div class="lbl">Open</div></div>
+    <div class="card done"><div class="num" id="s-done">–</div><div class="lbl">Finished</div></div>
+    <div class="card accent"><div class="num" id="s-pct">–</div><div class="lbl">Finished %</div></div>
+    <div class="card done"><div class="num" id="s-today">–</div><div class="lbl">Done today</div></div>
+    <div class="card"><div class="num" id="s-total">–</div><div class="lbl">Tracked total</div></div>
   </div>
 
-  <div class="main">
-    <div class="charts">
-      <div class="panel chart-panel">
-        <div class="chart-title">Added vs finished — last 14 days</div>
-        <div id="chart-days"></div>
+  <div class="toolbar">
+    <div class="search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#5c6577" stroke-width="2" stroke-linecap="round">
+        <circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>
+      </svg>
+      <input id="q" type="text" placeholder="Search threads…" autocomplete="off">
+      <kbd>/</kbd>
+    </div>
+    <div class="chips" id="chips">
+      <button class="chip active" data-f="open">Open <span class="n" id="c-open"></span></button>
+      <button class="chip" data-f="done">Finished <span class="n" id="c-done"></span></button>
+      <button class="chip" data-f="all">All</button>
+    </div>
+    <select id="sort" title="Sort order">
+      <option value="oldest">Oldest first</option>
+      <option value="newest">Newest first</option>
+    </select>
+    <span class="result-count num" id="result-count"></span>
+  </div>
+
+  <div class="layout">
+    <div class="side">
+      <div class="panel">
+        <h2>Projects</h2>
+        <div id="projects"><div class="skel" style="height:30px"></div></div>
       </div>
-      <div class="panel chart-panel">
-        <div class="chart-title">Status</div>
-        <div id="chart-status"></div>
+      <div class="panel">
+        <h2>claude-mem</h2>
+        <div class="cm-note" id="cm-note">…</div>
+        <div id="cm-projects"></div>
       </div>
     </div>
 
-    <div class="panel">
-      <h2 id="items-title">Open threads</h2>
-      <div id="items"></div>
-      <div class="addrow">
-        <input id="add-input" placeholder="add a task to this project…" maxlength="200">
-        <button id="add-btn">Add</button>
+    <div class="main">
+      <div class="charts">
+        <div class="panel chart-panel">
+          <div class="chart-title">Added vs finished · last 14 days</div>
+          <div id="chart-days"><div class="skel"></div></div>
+          <div class="legend">
+            <span><span class="sw" style="background:var(--open)"></span>added</span>
+            <span><span class="sw" style="background:var(--done)"></span>finished</span>
+          </div>
+        </div>
+        <div class="panel chart-panel">
+          <div class="chart-title">Status</div>
+          <div class="donut-wrap" id="chart-status"><div class="skel" style="width:120px;height:120px"></div></div>
+        </div>
       </div>
-    </div>
 
-    <div class="panel">
-      <h2>Finished</h2>
-      <div id="done-items"></div>
-    </div>
+      <div class="panel" id="items-panel">
+        <h2 id="items-title">Open threads</h2>
+        <div id="items"><div class="skel"></div><div class="skel"></div><div class="skel"></div></div>
+        <div class="addrow">
+          <input id="add-input" placeholder="Add a task to this project…" maxlength="200" autocomplete="off">
+          <button id="add-btn">Add</button>
+        </div>
+      </div>
 
-    <div class="panel cm-threads">
-      <h2>claude-mem — latest next steps per project</h2>
-      <div id="cm-threads"></div>
+      <div class="panel" id="done-panel">
+        <h2>Finished</h2>
+        <div id="done-items"><div class="skel"></div><div class="skel"></div></div>
+      </div>
+
+      <div class="panel cm-threads">
+        <h2>claude-mem · latest next steps per project</h2>
+        <div id="cm-threads"><div class="skel"></div></div>
+      </div>
     </div>
   </div>
+
 </div>
+
+<div class="toasts" id="toasts"></div>
 
 <script>
+/* ---------- state ---------- */
 let state = null;
-let activeProject = null;
-let pollTimer = null;
+let activeProject = null;        // null = all projects
+let filter = 'open';             // open | done | all
+let sortDir = 'oldest';
+let query = '';
+let expanded = new Set();        // expanded item ids
+let seenIds = new Set();         // ids rendered before (for enter animations)
+let lastRenderSig = '';
+let lastSync = 0;
+let confirmTimers = new Map();   // dismiss-confirm button -> revert timer
 
 const $ = (id) => document.getElementById(id);
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) =>
+  ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtDate = (ts) => ts ? new Date(ts).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'}) : '';
 
 function age(ts) {
   if (!ts) return '';
@@ -151,99 +438,250 @@ async function api(path, body) {
   return r.json();
 }
 
+/* ---------- toasts ---------- */
+const ICONS = {
+  ok:   '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.5 5 5 10-11"/></svg>',
+  warn: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v7M12 16.8v.2"/></svg>',
+  undo: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h11a5 5 0 0 1 0 10h-3"/><path d="m8 6-4 4 4 4"/></svg>',
+};
+
+function toast(msg, { type = 'ok', undoFn = null, ms = 5000 } = {}) {
+  const el = document.createElement('div');
+  el.className = 'toast';
+  const undoHtml = undoFn ? `<button class="undo">${ICONS.undo} undo</button>` : '';
+  el.innerHTML = `<span class="ic ${type}">${ICONS[type]}</span><span>${esc(msg)}</span>${undoHtml}`;
+  if (undoFn) el.querySelector('.undo').addEventListener('click', () => { undoFn(); dismiss(el); });
+  $('toasts').appendChild(el);
+  const t = setTimeout(() => dismiss(el), ms);
+  el.dataset.timer = t;
+  el.addEventListener('mouseenter', () => clearTimeout(+el.dataset.timer));
+  el.addEventListener('mouseleave', () => { el.dataset.timer = setTimeout(() => dismiss(el), 2000); });
+}
+function dismiss(el) {
+  if (el.dataset.gone) return;
+  el.dataset.gone = 1;
+  clearTimeout(+el.dataset.timer);
+  el.classList.add('leaving');
+  el.addEventListener('animationend', () => el.remove(), { once: true });
+}
+
+/* ---------- count-up ---------- */
+function setNum(el, value, suffix = '') {
+  const prev = el.dataset.v !== undefined ? +el.dataset.v : null;
+  if (prev === value) return;
+  el.dataset.v = value;
+  if (prev === null || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    el.textContent = value + suffix;
+    return;
+  }
+  const t0 = performance.now(), dur = 600;
+  (function tick(t) {
+    const p = Math.min(1, (t - t0) / dur);
+    const eased = 1 - Math.pow(1 - p, 3);
+    el.textContent = Math.round(prev + (value - prev) * eased) + suffix;
+    if (p < 1) requestAnimationFrame(tick);
+  })(t0);
+}
+
+/* ---------- data + render ---------- */
 async function refresh() {
   try {
     state = await api('/api/state');
-    $('live').textContent = '● live';
+    lastSync = Date.now();
     $('live').classList.remove('off');
-    render();
+    $('live-txt').textContent = 'live';
+    const sig = JSON.stringify([state.items, state.projects, state.claudemem?.available]);
+    if (sig !== lastRenderSig) { lastRenderSig = sig; render(); }
   } catch {
-    $('live').textContent = '○ offline';
     $('live').classList.add('off');
+    $('live-txt').textContent = 'offline';
   }
+  updateSyncAge();
+  setInterval(updateSyncAge, 5000);
+}
+function updateSyncAge() {
+  if (!lastSync) return;
+  const s = Math.round((Date.now() - lastSync) / 1000);
+  $('sync').textContent = s < 60 ? `synced ${s}s ago` : `synced ${Math.round(s / 60)}m ago`;
 }
 
 function render() {
   if (!state) return;
   const s = state.stats;
-  $('s-open').textContent = s.open;
-  $('s-done').textContent = s.done;
-  $('s-pct').textContent = s.finishedPct + '%';
-  $('s-today').textContent = s.doneToday;
-  $('s-total').textContent = s.total;
-  $('curproj').textContent = state.current ? 'current: ' + state.current : '';
+  setNum($('s-open'), s.open);
+  setNum($('s-done'), s.done);
+  setNum($('s-pct'), s.finishedPct, '%');
+  setNum($('s-today'), s.doneToday);
+  setNum($('s-total'), s.total);
+  $('c-open').textContent = s.open ? `(${s.open})` : '';
+  $('c-done').textContent = s.done ? `(${s.done})` : '';
 
-  // Projects sidebar (own tracker).
+  renderProjects();
+  renderCharts(s);
+  renderItems();
+  renderClaudeMem();
+}
+
+function renderProjects() {
   const own = state.projects || [];
-  const projHtml = own.map((p) => {
-    const cls = p.name === activeProject ? 'proj active' : 'proj';
+  const all = `<div class="proj proj-all ${activeProject === null ? 'active' : ''}" data-p="">
+    <span class="name">All projects</span><span class="cnt ${sOpenAll(own) ? '' : 'zero'}">${sOpenAll(own)}/${own.reduce((a, p) => a + p.open + p.done, 0)}</span></div>`;
+  const html = own.map((p) => {
+    const cls = 'proj' + (p.name === activeProject ? ' active' : '');
     const cntCls = p.open > 0 ? 'cnt' : 'cnt zero';
     return `<div class="${cls}" data-p="${esc(p.name)}" title="${esc(p.name)}">
       <span class="name">${esc(p.name)}</span><span class="${cntCls}">${p.open}/${p.open + p.done}</span></div>`;
   }).join('');
-  $('projects').innerHTML = own.length ? projHtml : '<div class="empty">no projects yet</div>';
-  document.querySelectorAll('#projects .proj').forEach((el) =>
-    el.addEventListener('click', () => { activeProject = el.dataset.p; render(); })
-  );
+  $('projects').innerHTML = all + html;
+  $('projects').querySelectorAll('.proj').forEach((el) =>
+    el.addEventListener('click', () => { activeProject = el.dataset.p || null; render(); }));
+}
+const sOpenAll = (own) => own.reduce((a, p) => a + p.open, 0);
 
-  // claude-mem sidebar.
-  const cm = state.claudemem || {};
-  $('cm-note').textContent = cm.available
-    ? `${(cm.projects || []).length} projects observed`
-    : 'claude-mem not available';
-  const cmHtml = (cm.projects || []).slice(0, 12).map((p) =>
-    `<div class="proj" title="${esc(p.name)}"><span class="name">${esc(p.name)}</span>
-     <span class="cnt" style="color:var(--muted)">${p.sessions}s</span></div>`
-  ).join('');
-  $('cm-projects').innerHTML = cm.available ? cmHtml : '';
+function visibleItems() {
+  let items = (state.items || []).filter((i) => !activeProject || i.project === activeProject);
+  if (filter !== 'all') items = items.filter((i) => i.status === filter);
+  if (query) items = items.filter((i) => i.summary.toLowerCase().includes(query));
+  items.sort((a, b) => sortDir === 'oldest'
+    ? (a.timestamp || 0) - (b.timestamp || 0)
+    : (b.timestamp || 0) - (a.timestamp || 0));
+  return items;
+}
 
-  drawDaysChart(state.last14 || []);
-  drawStatusChart(s);
+function renderItems() {
+  const list = $('items');
+  const done = $('done-items');
+  const items = visibleItems();
 
-  // Items for active project (or all).
-  const items = (state.items || []).filter(
-    (i) => !activeProject || i.project === activeProject
-  );
-  const open = items.filter((i) => i.status === 'open')
-    .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-  const done = items.filter((i) => i.status === 'done')
-    .sort((a, b) => (b.statusChangedAt || 0) - (a.statusChangedAt || 0));
+  // Filter chips choose which panel shows; search/sort/project apply inside.
+  $('items-panel').classList.toggle('hidden', filter === 'done');
+  $('done-panel').classList.toggle('hidden', filter === 'open');
 
-  $('items-title').textContent = 'Open threads' + (activeProject ? ' — ' + activeProject : '');
-  $('items').innerHTML = open.length ? open.map((i) => itemHtml(i)).join('')
-    : '<div class="empty">nothing open 🎉</div>';
-  $('done-items').innerHTML = done.length ? done.map((i) => itemHtml(i)).join('')
-    : '<div class="empty">nothing finished yet</div>';
+  const total = (state.items || []).filter((i) => !activeProject || i.project === activeProject).length;
+  $('result-count').textContent = query || filter !== 'open'
+    ? `${items.length} of ${total} shown` : '';
 
-  document.querySelectorAll('.btns button[data-id]').forEach((b) =>
-    b.addEventListener('click', () => act(b.dataset.id, b.dataset.act))
-  );
+  $('items-title').textContent = (filter === 'done' ? 'Finished' : filter === 'all' ? 'All threads' : 'Open threads')
+    + (activeProject ? ' · ' + activeProject : '');
 
-  // claude-mem latest next steps.
-  const threads = (cm.projects || []).filter((p) => (p.latestNextSteps || []).length);
-  $('cm-threads').innerHTML = threads.length
-    ? threads.map((p) => `
-        <h2 style="margin:10px 6px 4px">${esc(p.name)} <span style="color:var(--muted)">· ${age(p.lastActive * 1000)}</span></h2>
-        ${p.latestNextSteps.map((n) => `<div class="item"><div class="age"></div><div class="sum">${esc(n)}</div></div>`).join('')}
-      `).join('')
-    : '<div class="empty">no claude-mem data</div>';
+  const openList = items.filter((i) => i.status === 'open');
+  const doneList = items.filter((i) => i.status === 'done');
+
+  list.innerHTML = openList.length
+    ? openList.map((i) => itemHtml(i)).join('')
+    : emptyHtml(query ? 'No matches' : 'Nothing open',
+        query ? `Nothing matches “${esc(query)}”.` : 'Every captured thread is finished. Nice work.');
+  done.innerHTML = doneList.length
+    ? doneList.map((i) => itemHtml(i)).join('')
+    : emptyHtml(query ? 'No matches' : 'Nothing finished yet',
+        query ? `Nothing matches “${esc(query)}”.` : 'Mark something done and it lands here.');
+
+  wireItems(list);
+  wireItems(done);
+}
+
+function emptyHtml(big, sub) {
+  return `<div class="empty">
+    <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="#5b8cff" stroke-width="1.5" stroke-linecap="round">
+      <circle cx="12" cy="12" r="8.2"/><path d="M5 15.5 Q12 10.5 19 15.5"/><circle cx="9.4" cy="10.2" r=".9" fill="#5b8cff" stroke="none"/><circle cx="14.6" cy="10.2" r=".9" fill="#5b8cff" stroke="none"/>
+    </svg>
+    <div class="big">${esc(big)}</div><div class="sub">${sub}</div></div>`;
 }
 
 function itemHtml(i) {
-  const cls = i.status === 'done' ? 'item done' : 'item';
+  const isNew = !seenIds.has(i.id);
+  seenIds.add(i.id);
+  const isDone = i.status === 'done';
+  const exp = expanded.has(i.id);
   const btns = i.status === 'open'
-    ? `<button class="ok" data-id="${i.id}" data-act="done" title="mark done">✓</button>
-       <button class="no" data-id="${i.id}" data-act="dismissed" title="dismiss">✕</button>`
-    : `<button data-id="${i.id}" data-act="open" title="reopen">↺</button>`;
-  return `<div class="${cls}">
-    <div class="age">${i.status === 'done' ? age(i.statusChangedAt) : age(i.timestamp)}</div>
-    <div class="sum">${esc(i.summary)}<span class="src">${esc(i.source || 'indexer')}</span></div>
-    <div class="btns">${btns}</div>
+    ? `<button class="ok" data-id="${i.id}" data-act="done" title="Mark done">${ICON_CHECK}</button>
+       <button class="no" data-id="${i.id}" data-act="dismiss" title="Dismiss">${ICON_X}</button>`
+    : `<button class="rev" data-id="${i.id}" data-act="open" title="Reopen">${ICON_UNDO}</button>`;
+  const projTag = activeProject ? '' : `<span class="tag proj-tag">${esc(i.project || 'unknown')}</span>`;
+  return `
+  <div class="item-row-wrap ${exp ? 'expanded' : ''}">
+    <div class="item ${isDone ? 'done' : ''} ${isNew ? 'entering' : ''}" data-id="${i.id}">
+      <div class="age">${isDone ? age(i.statusChangedAt) : age(i.timestamp)}</div>
+      <div class="sum"><span class="txt">${esc(i.summary)}</span><span class="tag">${esc(i.source || 'indexer')}</span>${projTag}</div>
+      <div class="btns">${btns}</div>
+    </div>
+    <div class="detail"><div class="detail-inner"><div class="detail-body">
+      <div class="editrow">
+        <input class="edit-input" data-id="${i.id}" value="${esc(i.summary)}" maxlength="200" spellcheck="false">
+        <button class="mini-btn primary" data-edit="${i.id}">Save</button>
+      </div>
+      <div class="meta">
+        <span><b>Project</b>${esc(i.project || 'unknown')}</span>
+        <span><b>Created</b>${fmtDate(i.timestamp)} (${age(i.timestamp)})</span>
+        ${i.statusChangedAt ? `<span><b>Changed</b>${fmtDate(i.statusChangedAt)}</span>` : ''}
+        ${i.editedAt ? `<span><b>Edited</b>${fmtDate(i.editedAt)}</span>` : ''}
+      </div>
+      <div class="meta"><span><b>ID</b><span class="mono">${i.id}</span></span>
+      ${i.sessionPath ? `<span class="mono" title="${esc(i.sessionPath)}">${esc(String(i.sessionPath).split(/[\\/]/).pop())}</span>` : ''}</div>
+    </div></div></div>
   </div>`;
 }
+const ICON_CHECK = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m4.5 12.5 5 5 10-11"/></svg>';
+const ICON_X = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>';
+const ICON_UNDO = '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 10h11a5 5 0 0 1 0 10h-3"/><path d="m8 6-4 4 4 4"/></svg>';
 
-async function act(id, status) {
-  await api('/api/mark', { id, status });
+function wireItems(container) {
+  container.querySelectorAll('.item').forEach((el) => {
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('button') || e.target.closest('input')) return;
+      const id = el.dataset.id;
+      const wrap = el.closest('.item-row-wrap');
+      if (expanded.has(id)) { expanded.delete(id); wrap.classList.remove('expanded'); }
+      else { expanded.add(id); wrap.classList.add('expanded'); }
+    });
+  });
+  container.querySelectorAll('.btns button').forEach((b) =>
+    b.addEventListener('click', (e) => { e.stopPropagation(); act(b.dataset.id, b.dataset.act, b); }));
+  container.querySelectorAll('[data-edit]').forEach((b) =>
+    b.addEventListener('click', (e) => { e.stopPropagation(); saveEdit(b.dataset.edit); }));
+  container.querySelectorAll('.edit-input').forEach((inp) =>
+    inp.addEventListener('keydown', (e) => {
+      e.stopPropagation();
+      if (e.key === 'Enter') saveEdit(inp.dataset.id);
+      if (e.key === 'Escape') inp.value = inp.defaultValue;
+    }));
+}
+
+/* ---------- actions ---------- */
+async function act(id, action, btn) {
+  if (action === 'dismiss') {
+    // two-step confirm
+    if (!btn.classList.contains('confirm')) {
+      btn.classList.add('confirm');
+      btn.textContent = 'sure?';
+      const t = setTimeout(() => {
+        btn.classList.remove('confirm');
+        btn.innerHTML = ICON_X;
+      }, 2600);
+      confirmTimers.set(btn, t);
+      return;
+    }
+    clearTimeout(confirmTimers.get(btn));
+  }
+  const prevStatus = (state.items || []).find((i) => i.id === id)?.status || 'open';
+  const r = await api('/api/mark', { id, status: action === 'done' ? 'done' : action === 'dismiss' ? 'dismissed' : 'open' });
+  if (r.error) { toast(r.error, { type: 'warn' }); return; }
+  refresh();
+  const labels = { done: 'Marked done', dismissed: 'Dismissed', open: 'Reopened' };
+  toast(labels[action] || action, {
+    type: action === 'dismiss' ? 'warn' : 'ok',
+    undoFn: () => api('/api/mark', { id, status: prevStatus }).then(refresh),
+  });
+}
+
+async function saveEdit(id) {
+  const inp = document.querySelector(`.edit-input[data-id="${id}"]`);
+  if (!inp) return;
+  const val = inp.value.trim();
+  if (!val) { toast('Summary can’t be empty', { type: 'warn' }); return; }
+  const r = await api('/api/update', { id, summary: val });
+  if (r.error) { toast(r.error, { type: 'warn' }); return; }
+  toast('Saved', { ms: 2500 });
   refresh();
 }
 
@@ -251,29 +689,65 @@ async function add() {
   const v = $('add-input').value.trim();
   if (!v) return;
   const r = await api('/api/add', { summary: v, project: activeProject || state.current || 'unknown' });
-  if (r.ok) $('add-input').value = '';
+  if (r.error) { toast(r.error, { type: 'warn' }); return; }
+  $('add-input').value = '';
+  toast('Added', { ms: 2500 });
   refresh();
 }
 $('add-btn').addEventListener('click', add);
 $('add-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
 
-// --- charts (inline SVG, no deps) ---
+/* ---------- search / filter / sort ---------- */
+let qTimer = null;
+$('q').addEventListener('input', (e) => {
+  clearTimeout(qTimer);
+  qTimer = setTimeout(() => { query = e.target.value.trim().toLowerCase(); renderItems(); }, 120);
+});
+$('chips').querySelectorAll('.chip').forEach((c) =>
+  c.addEventListener('click', () => {
+    $('chips').querySelectorAll('.chip').forEach((x) => x.classList.remove('active'));
+    c.classList.add('active');
+    filter = c.dataset.f;
+    renderItems();
+  }));
+$('sort').addEventListener('change', (e) => { sortDir = e.target.value; renderItems(); });
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === '/' && document.activeElement.tagName !== 'INPUT') {
+    e.preventDefault();
+    $('q').focus();
+  }
+  if (e.key === 'Escape') {
+    if (document.activeElement === $('q')) { $('q').blur(); }
+    else if (query) { $('q').value = ''; query = ''; renderItems(); }
+  }
+});
+
+/* ---------- charts ---------- */
+function renderCharts(s) {
+  drawDaysChart(state.last14 || []);
+  drawStatusChart(s);
+}
 
 function drawDaysChart(data) {
-  const W = 640, H = 140, pad = 24, bw = Math.max(4, (W - pad * 2) / data.length - 4);
+  const W = 640, H = 140, pad = 24, bw = Math.max(4, (W - pad * 2) / Math.max(1, data.length) - 4);
   const max = Math.max(2, ...data.map((d) => Math.max(d.done, d.added)));
   const y = (v) => H - 20 - (v / max) * (H - 40);
   let bars = '', labels = '';
   data.forEach((d, i) => {
-    const x = pad + (i * (W - pad * 2)) / data.length;
-    bars += `<rect x="${x}" y="${y(d.added)}" width="${bw}" height="${H - 20 - y(d.added)}" fill="var(--open)" opacity=".55" rx="2"/>`;
-    bars += `<rect x="${x}" y="${y(d.done)}" width="${bw}" height="${H - 20 - y(d.done)}" fill="var(--done)" rx="2"/>`;
-    if (i % 3 === 0) labels += `<text x="${x + bw / 2}" y="${H - 4}" fill="var(--muted)" font-size="9" text-anchor="middle">${d.date.slice(5)}</text>`;
+    const x = pad + (i * (W - pad * 2)) / Math.max(1, data.length);
+    bars += `<rect x="${x}" y="${y(d.added)}" width="${bw}" height="${Math.max(1, H - 20 - y(d.added))}" fill="var(--open)" opacity=".5" rx="2" style="transition-delay:${i * 22}ms"/>`;
+    bars += `<rect x="${x}" y="${y(d.done)}" width="${bw}" height="${Math.max(1, H - 20 - y(d.done))}" fill="var(--done)" rx="2" style="transition-delay:${i * 22 + 60}ms"/>`;
+    if (i % 3 === 0) labels += `<text x="${x + bw / 2}" y="${H - 4}" fill="var(--faint)" font-size="9" text-anchor="middle">${d.date.slice(5)}</text>`;
   });
   $('chart-days').innerHTML = `<svg viewBox="0 0 ${W} ${H}">
     <line x1="${pad - 6}" y1="${y(max)}" x2="${W - pad}" y2="${y(max)}" stroke="var(--border)" stroke-dasharray="3 3"/>
-    <text x="4" y="${y(max) + 3}" fill="var(--muted)" font-size="9">${max}</text>
-    ${bars}${labels}</svg>`;
+    <text x="4" y="${y(max) + 3}" fill="var(--faint)" font-size="9">${max}</text>
+    <g class="bars">${bars}</g>${labels}</svg>`;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const g = $('chart-days').querySelector('.bars');
+    if (g) g.classList.add('rendered');
+  }));
 }
 
 function drawStatusChart(s) {
@@ -283,25 +757,47 @@ function drawStatusChart(s) {
     { v: s.done, c: 'var(--done)', l: 'finished' },
     { v: s.dismissed, c: 'var(--dismissed)', l: 'dismissed' },
   ];
-  const R = 54, C = 2 * Math.PI * R;
+  const R = 52, C = 2 * Math.PI * R;
   let off = 0, arcs = '', legend = '';
   for (const p of parts) {
     if (p.v <= 0) continue;
     const frac = p.v / total;
-    arcs += `<circle r="${R}" cx="70" cy="70" fill="none" stroke="${p.c}" stroke-width="16"
-      stroke-dasharray="${frac * C} ${C}" stroke-dashoffset="${-off * C}" transform="rotate(-90 70 70)"/>`;
-    legend += `<div style="display:flex;justify-content:space-between;font-size:12px;margin:2px 0">
-      <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${p.c};margin-right:6px"></span>${p.l}</span>
-      <span style="color:var(--muted)">${p.v}</span></div>`;
+    arcs += `<circle r="${R}" cx="64" cy="64" fill="none" stroke="${p.c}" stroke-width="15"
+      stroke-dasharray="${frac * C} ${C}" stroke-dashoffset="${-off * C}" transform="rotate(-90 64 64)" stroke-linecap="butt"/>`;
+    legend += `<div style="display:flex;justify-content:space-between;font-size:12px;margin:3px 0">
+      <span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:${p.c};margin-right:7px"></span>${p.l}</span>
+      <span class="num" style="color:var(--muted)">${p.v}</span></div>`;
     off += frac;
   }
-  $('chart-status').innerHTML = `<svg viewBox="0 0 140 140" style="max-width:140px;float:left">${arcs}
-    <text x="70" y="74" fill="var(--text)" font-size="16" font-weight="700" text-anchor="middle">${s.finishedPct}%</text></svg>
-    <div style="overflow:hidden;padding:8px 0 0 12px">${legend}</div>`;
+  $('chart-status').innerHTML = `<svg viewBox="0 0 128 128" width="128">${arcs}
+    <text x="64" y="68" fill="var(--text)" font-size="17" font-weight="700" text-anchor="middle">${s.finishedPct}%</text>
+    <text x="64" y="82" fill="var(--faint)" font-size="8" text-anchor="middle" letter-spacing="1">FINISHED</text></svg>
+    <div style="overflow:hidden;padding:6px 0 0 8px;min-width:0">${legend}</div>`;
 }
 
+/* ---------- claude-mem ---------- */
+function renderClaudeMem() {
+  const cm = state.claudemem || {};
+  $('cm-note').textContent = cm.available
+    ? `${(cm.projects || []).length} projects observed`
+    : 'claude-mem not available';
+  const cmHtml = (cm.projects || []).slice(0, 12).map((p) =>
+    `<div class="proj" style="cursor:default" title="${esc(p.name)}"><span class="name">${esc(p.name)}</span>
+     <span class="cnt" style="color:var(--faint)">${p.sessions}s</span></div>`).join('');
+  $('cm-projects').innerHTML = cm.available ? cmHtml : '';
+
+  const threads = (cm.projects || []).filter((p) => (p.latestNextSteps || []).length);
+  $('cm-threads').innerHTML = threads.length
+    ? threads.map((p) => `
+        <h3>${esc(p.name)} <span class="when">${age(p.lastActive * 1000)}</span></h3>
+        ${p.latestNextSteps.map((n) => `<div class="item"><div class="age"></div><div class="sum">${esc(n)}</div></div>`).join('')}
+      `).join('')
+    : emptyHtml('No claude-mem data', 'Install claude-mem to see its next-steps here.');
+}
+
+/* ---------- boot ---------- */
 refresh();
-pollTimer = setInterval(refresh, 3000);
+setInterval(refresh, 3000);
 </script>
 </body>
 </html>
