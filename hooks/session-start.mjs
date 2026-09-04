@@ -19,6 +19,35 @@ import {
   humanAge,
 } from '../scripts/lib/store.mjs';
 
+// Start the dashboard server (detached) if it isn't already running.
+// Fire-and-forget: never blocks session start, never fails the hook.
+async function ensureDashboard(config) {
+  if (config.dashboard === false) return;
+  const port = config.dashboardPort || 37987;
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/api/ping`, {
+      signal: AbortSignal.timeout(800),
+    });
+    if (res.ok) return; // already up
+  } catch {
+    /* not running — start it */
+  }
+  try {
+    const { spawn } = await import('node:child_process');
+    const { fileURLToPath } = await import('node:url');
+    const server = fileURLToPath(new URL('../scripts/server.mjs', import.meta.url));
+    const child = spawn(process.execPath, [server], {
+      detached: true,
+      stdio: 'ignore',
+      env: { ...process.env },
+      windowsHide: true,
+    });
+    child.unref();
+  } catch {
+    /* dashboard is optional; ignore failures */
+  }
+}
+
 function emit(additionalContext) {
   process.stdout.write(
     JSON.stringify({
@@ -32,6 +61,8 @@ function emit(additionalContext) {
 
 async function main() {
   const config = loadConfig();
+
+  ensureDashboard(config); // fire-and-forget, never awaited
 
   if (!config.digestOnStart && !process.env.ADHD_FORCE_DIGEST) {
     emit('');

@@ -17,6 +17,10 @@
           {
             "type": "command",
             "command": "node \"$CLAUDE_PLUGIN_ROOT/hooks/prompt-submit.mjs\""
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PLUGIN_ROOT/hooks/capture.mjs\""
           }
         ]
       }

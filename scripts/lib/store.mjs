@@ -101,6 +101,41 @@ export function markReminded(idx, id, now = Date.now()) {
   saveIndex(idx);
 }
 
+// Project name for an item. Captured items carry an explicit project;
+// transcript-derived ones get it from the munged projects dir name
+// (e.g. "F--Claude-vibeXcode-Skills-ADHD" -> "ADHD").
+export function itemProject(it) {
+  if (it.project) return it.project;
+  if (!it.sessionPath) return 'unknown';
+  const dir = path.basename(path.dirname(it.sessionPath));
+  const parts = dir.split('-');
+  return parts[parts.length - 1] || dir;
+}
+
+// Record a new tracked task (live capture by the model, or the dashboard).
+export function addItem(idx, { summary, project, source = 'capture', sessionPath = null, now = Date.now() }) {
+  const clean = String(summary).replace(/\s+/g, ' ').trim().slice(0, 200);
+  if (!clean) return null;
+  const id = itemId(clean, sessionPath || project || 'capture');
+  if (idx.items.some((i) => i.id === id)) return null; // duplicate
+  const item = {
+    id,
+    summary: clean,
+    project: project || 'unknown',
+    source,
+    sessionPath,
+    sessionKey: sessionPath,
+    sessionTs: now,
+    timestamp: now,
+    status: 'open',
+    lastReminded: null,
+    origin: 'capture',
+  };
+  idx.items.push(item);
+  saveIndex(idx);
+  return item;
+}
+
 export function markStatus(idx, id, status, now = Date.now()) {
   const it = idx.items.find((i) => i.id === id);
   if (!it) return false;

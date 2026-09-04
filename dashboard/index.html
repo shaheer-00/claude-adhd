@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Claude ADHD</title>
+<style>
+  :root {
+    --bg: #0f1115; --panel: #171a21; --panel2: #1e222b;
+    --border: #2a2f3a; --text: #e7eaf0; --muted: #8b93a3;
+    --accent: #6c8cff; --accent2: #8f6cff;
+    --open: #e8b34b; --done: #4cc38a; --dismissed: #6b7280;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font: 14px/1.5 -apple-system, "Segoe UI", Roboto, sans-serif;
+    padding: 20px; max-width: 1200px; margin: 0 auto;
+  }
+  header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 18px; }
+  header h1 { font-size: 20px; font-weight: 700; }
+  header .live { color: var(--done); font-size: 12px; }
+  header .live.off { color: var(--muted); }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 18px; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .card .num { font-size: 28px; font-weight: 700; }
+  .card .lbl { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
+  .card.open .num { color: var(--open); }
+  .card.done .num { color: var(--done); }
+  .layout { display: grid; grid-template-columns: 220px 1fr; gap: 14px; }
+  .side { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 10px; align-self: start; }
+  .side h2, .main h2 { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; margin: 6px 6px 8px; }
+  .proj { padding: 7px 10px; border-radius: 7px; cursor: pointer; display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+  .proj:hover { background: var(--panel2); }
+  .proj.active { background: var(--panel2); outline: 1px solid var(--accent); }
+  .proj .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .proj .cnt { color: var(--open); font-size: 12px; flex-shrink: 0; }
+  .proj .cnt.zero { color: var(--done); }
+  .main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+  .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .item { display: flex; gap: 10px; align-items: flex-start; padding: 9px 6px; border-bottom: 1px solid var(--border); }
+  .item:last-child { border-bottom: none; }
+  .item .age { color: var(--muted); font-size: 12px; flex-shrink: 0; width: 86px; padding-top: 2px; }
+  .item .sum { flex: 1; min-width: 0; overflow-wrap: break-word; }
+  .item.done .sum { color: var(--muted); text-decoration: line-through; }
+  .item .src { font-size: 10px; color: var(--muted); border: 1px solid var(--border); border-radius: 4px; padding: 0 4px; margin-left: 6px; vertical-align: 2px; }
+  .btns { display: flex; gap: 6px; flex-shrink: 0; }
+  .btns button {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--border);
+    border-radius: 6px; padding: 3px 9px; font-size: 12px; cursor: pointer;
+  }
+  .btns button:hover { border-color: var(--accent); }
+  .btns button.ok:hover { border-color: var(--done); color: var(--done); }
+  .btns button.no:hover { border-color: var(--dismissed); color: var(--dismissed); }
+  .charts { display: grid; grid-template-columns: 1fr 220px; gap: 14px; }
+  .chart-panel svg { width: 100%; height: auto; display: block; }
+  .chart-title { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .cm-note { color: var(--muted); font-size: 12px; padding: 4px 6px; }
+  .cm-threads .item .sum { color: var(--text); }
+  .empty { color: var(--muted); padding: 14px 6px; text-align: center; }
+  .addrow { display: flex; gap: 8px; margin-top: 10px; }
+  .addrow input {
+    flex: 1; background: var(--panel2); border: 1px solid var(--border); color: var(--text);
+    border-radius: 7px; padding: 7px 10px; font: inherit;
+  }
+  .addrow button {
+    background: var(--accent); color: #fff; border: none; border-radius: 7px; padding: 7px 14px; cursor: pointer; font: inherit;
+  }
+  @media (max-width: 800px) { .layout { grid-template-columns: 1fr; } .charts { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>🧠 Claude ADHD</h1>
+  <span class="live" id="live">● live</span>
+  <span style="color:var(--muted);font-size:12px" id="curproj"></span>
+</header>
+
+<div class="stats">
+  <div class="card open"><div class="num" id="s-open">–</div><div class="lbl">Open</div></div>
+  <div class="card done"><div class="num" id="s-done">–</div><div class="lbl">Finished</div></div>
+  <div class="card"><div class="num" id="s-pct">–</div><div class="lbl">Finished %</div></div>
+  <div class="card done"><div class="num" id="s-today">–</div><div class="lbl">Done today</div></div>
+  <div class="card"><div class="num" id="s-total">–</div><div class="lbl">Tracked total</div></div>
+</div>
+
+<div class="layout">
+  <div class="side">
+    <h2>Projects</h2>
+    <div id="projects"></div>
+    <h2 style="margin-top:14px">claude-mem</h2>
+    <div class="cm-note" id="cm-note">…</div>
+    <div id="cm-projects"></div>
+  </div>
+
+  <div class="main">
+    <div class="charts">
+      <div class="panel chart-panel">
+        <div class="chart-title">Added vs finished — last 14 days</div>
+        <div id="chart-days"></div>
+      </div>
+      <div class="panel chart-panel">
+        <div class="chart-title">Status</div>
+        <div id="chart-status"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2 id="items-title">Open threads</h2>
+      <div id="items"></div>
+      <div class="addrow">
+        <input id="add-input" placeholder="add a task to this project…" maxlength="200">
+        <button id="add-btn">Add</button>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Finished</h2>
+      <div id="done-items"></div>
+    </div>
+
+    <div class="panel cm-threads">
+      <h2>claude-mem — latest next steps per project</h2>
+      <div id="cm-threads"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+let state = null;
+let activeProject = null;
+let pollTimer = null;
+
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+function age(ts) {
+  if (!ts) return '';
+  const d = Math.max(0, Math.round((Date.now() - ts) / 86400000));
+  if (d === 0) return 'today';
+  if (d === 1) return 'yesterday';
+  if (d < 14) return d + 'd ago';
+  if (d < 60) return Math.round(d / 7) + 'w ago';
+  return Math.round(d / 30) + 'mo ago';
+}
+
+async function api(path, body) {
+  const r = await fetch(path, body ? {
+    method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+  } : undefined);
+  return r.json();
+}
+
+async function refresh() {
+  try {
+    state = await api('/api/state');
+    $('live').textContent = '● live';
+    $('live').classList.remove('off');
+    render();
+  } catch {
+    $('live').textContent = '○ offline';
+    $('live').classList.add('off');
+  }
+}
+
+function render() {
+  if (!state) return;
+  const s = state.stats;
+  $('s-open').textContent = s.open;
+  $('s-done').textContent = s.done;
+  $('s-pct').textContent = s.finishedPct + '%';
+  $('s-today').textContent = s.doneToday;
+  $('s-total').textContent = s.total;
+  $('curproj').textContent = state.current ? 'current: ' + state.current : '';
+
+  // Projects sidebar (own tracker).
+  const own = state.projects || [];
+  const projHtml = own.map((p) => {
+    const cls = p.name === activeProject ? 'proj active' : 'proj';
+    const cntCls = p.open > 0 ? 'cnt' : 'cnt zero';
+    return `<div class="${cls}" data-p="${esc(p.name)}" title="${esc(p.name)}">
+      <span class="name">${esc(p.name)}</span><span class="${cntCls}">${p.open}/${p.open + p.done}</span></div>`;
+  }).join('');
+  $('projects').innerHTML = own.length ? projHtml : '<div class="empty">no projects yet</div>';
+  document.querySelectorAll('#projects .proj').forEach((el) =>
+    el.addEventListener('click', () => { activeProject = el.dataset.p; render(); })
+  );
+
+  // claude-mem sidebar.
+  const cm = state.claudemem || {};
+  $('cm-note').textContent = cm.available
+    ? `${(cm.projects || []).length} projects observed`
+    : 'claude-mem not available';
+  const cmHtml = (cm.projects || []).slice(0, 12).map((p) =>
+    `<div class="proj" title="${esc(p.name)}"><span class="name">${esc(p.name)}</span>
+     <span class="cnt" style="color:var(--muted)">${p.sessions}s</span></div>`
+  ).join('');
+  $('cm-projects').innerHTML = cm.available ? cmHtml : '';
+
+  drawDaysChart(state.last14 || []);
+  drawStatusChart(s);
+
+  // Items for active project (or all).
+  const items = (state.items || []).filter(
+    (i) => !activeProject || i.project === activeProject
+  );
+  const open = items.filter((i) => i.status === 'open')
+    .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  const done = items.filter((i) => i.status === 'done')
+    .sort((a, b) => (b.statusChangedAt || 0) - (a.statusChangedAt || 0));
+
+  $('items-title').textContent = 'Open threads' + (activeProject ? ' — ' + activeProject : '');
+  $('items').innerHTML = open.length ? open.map((i) => itemHtml(i)).join('')
+    : '<div class="empty">nothing open 🎉</div>';
+  $('done-items').innerHTML = done.length ? done.map((i) => itemHtml(i)).join('')
+    : '<div class="empty">nothing finished yet</div>';
+
+  document.querySelectorAll('.btns button[data-id]').forEach((b) =>
+    b.addEventListener('click', () => act(b.dataset.id, b.dataset.act))
+  );
+
+  // claude-mem latest next steps.
+  const threads = (cm.projects || []).filter((p) => (p.latestNextSteps || []).length);
+  $('cm-threads').innerHTML = threads.length
+    ? threads.map((p) => `
+        <h2 style="margin:10px 6px 4px">${esc(p.name)} <span style="color:var(--muted)">· ${age(p.lastActive * 1000)}</span></h2>
+        ${p.latestNextSteps.map((n) => `<div class="item"><div class="age"></div><div class="sum">${esc(n)}</div></div>`).join('')}
+      `).join('')
+    : '<div class="empty">no claude-mem data</div>';
+}
+
+function itemHtml(i) {
+  const cls = i.status === 'done' ? 'item done' : 'item';
+  const btns = i.status === 'open'
+    ? `<button class="ok" data-id="${i.id}" data-act="done" title="mark done">✓</button>
+       <button class="no" data-id="${i.id}" data-act="dismissed" title="dismiss">✕</button>`
+    : `<button data-id="${i.id}" data-act="open" title="reopen">↺</button>`;
+  return `<div class="${cls}">
+    <div class="age">${i.status === 'done' ? age(i.statusChangedAt) : age(i.timestamp)}</div>
+    <div class="sum">${esc(i.summary)}<span class="src">${esc(i.source || 'indexer')}</span></div>
+    <div class="btns">${btns}</div>
+  </div>`;
+}
+
+async function act(id, status) {
+  await api('/api/mark', { id, status });
+  refresh();
+}
+
+async function add() {
+  const v = $('add-input').value.trim();
+  if (!v) return;
+  const r = await api('/api/add', { summary: v, project: activeProject || state.current || 'unknown' });
+  if (r.ok) $('add-input').value = '';
+  refresh();
+}
+$('add-btn').addEventListener('click', add);
+$('add-input').addEventListener('keydown', (e) => { if (e.key === 'Enter') add(); });
+
+// --- charts (inline SVG, no deps) ---
+
+function drawDaysChart(data) {
+  const W = 640, H = 140, pad = 24, bw = Math.max(4, (W - pad * 2) / data.length - 4);
+  const max = Math.max(2, ...data.map((d) => Math.max(d.done, d.added)));
+  const y = (v) => H - 20 - (v / max) * (H - 40);
+  let bars = '', labels = '';
+  data.forEach((d, i) => {
+    const x = pad + (i * (W - pad * 2)) / data.length;
+    bars += `<rect x="${x}" y="${y(d.added)}" width="${bw}" height="${H - 20 - y(d.added)}" fill="var(--open)" opacity=".55" rx="2"/>`;
+    bars += `<rect x="${x}" y="${y(d.done)}" width="${bw}" height="${H - 20 - y(d.done)}" fill="var(--done)" rx="2"/>`;
+    if (i % 3 === 0) labels += `<text x="${x + bw / 2}" y="${H - 4}" fill="var(--muted)" font-size="9" text-anchor="middle">${d.date.slice(5)}</text>`;
+  });
+  $('chart-days').innerHTML = `<svg viewBox="0 0 ${W} ${H}">
+    <line x1="${pad - 6}" y1="${y(max)}" x2="${W - pad}" y2="${y(max)}" stroke="var(--border)" stroke-dasharray="3 3"/>
+    <text x="4" y="${y(max) + 3}" fill="var(--muted)" font-size="9">${max}</text>
+    ${bars}${labels}</svg>`;
+}
+
+function drawStatusChart(s) {
+  const total = Math.max(1, s.open + s.done + s.dismissed);
+  const parts = [
+    { v: s.open, c: 'var(--open)', l: 'open' },
+    { v: s.done, c: 'var(--done)', l: 'finished' },
+    { v: s.dismissed, c: 'var(--dismissed)', l: 'dismissed' },
+  ];
+  const R = 54, C = 2 * Math.PI * R;
+  let off = 0, arcs = '', legend = '';
+  for (const p of parts) {
+    if (p.v <= 0) continue;
+    const frac = p.v / total;
+    arcs += `<circle r="${R}" cx="70" cy="70" fill="none" stroke="${p.c}" stroke-width="16"
+      stroke-dasharray="${frac * C} ${C}" stroke-dashoffset="${-off * C}" transform="rotate(-90 70 70)"/>`;
+    legend += `<div style="display:flex;justify-content:space-between;font-size:12px;margin:2px 0">
+      <span><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:${p.c};margin-right:6px"></span>${p.l}</span>
+      <span style="color:var(--muted)">${p.v}</span></div>`;
+    off += frac;
+  }
+  $('chart-status').innerHTML = `<svg viewBox="0 0 140 140" style="max-width:140px;float:left">${arcs}
+    <text x="70" y="74" fill="var(--text)" font-size="16" font-weight="700" text-anchor="middle">${s.finishedPct}%</text></svg>
+    <div style="overflow:hidden;padding:8px 0 0 12px">${legend}</div>`;
+}
+
+refresh();
+pollTimer = setInterval(refresh, 3000);
+</script>
+</body>
+</html>
