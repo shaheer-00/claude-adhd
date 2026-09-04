@@ -1,6 +1,6 @@
 ---
 name: remind-me
-description: Surface unfinished or forgotten tasks, ideas, and open questions from the user's past Claude Code sessions. Use when the user says "remind me", "what did I forget", "what's unfinished", "what was I working on", "did I leave anything open", or invokes /remind-me. Especially useful for users with ADHD.
+description: Surface unfinished or forgotten tasks, ideas, and open questions from the user's past Claude Code sessions, and manage custom reminders. Use when the user says "remind me", "what did I forget", "what's unfinished", "what was I working on", "did I leave anything open", "set a reminder", "remind me to", or invokes /remind-me or /remind. Especially useful for users with ADHD.
 ---
 
 # Remind me — forgotten open threads
@@ -44,6 +44,18 @@ Show the user things they said in past sessions that never got finished, ranked 
 ## Tone
 
 No pressure, no guilt, no lecturing. The user forgot these things — that's the point. One line per item, offer choices, then act. Never scold ("you really should finish X"). Never show more than ~8 items at once.
+
+## Reminders (custom messages)
+
+If the user's request is about setting or managing reminders (not past threads), use `scripts/remind.mjs` instead of the indexer:
+
+- **Set**: `node "$CLAUDE_PLUGIN_ROOT/scripts/remind.mjs" add "<message>" --at <ISO datetime> | --in <e.g. 2h, 30m, 1d> | --every session|day | --random [--project <name>]`
+  - Compute the actual date/time from natural language ("tomorrow 3pm" → tomorrow's ISO datetime at 15:00 local).
+- **List**: `node "$CLAUDE_PLUGIN_ROOT/scripts/remind.mjs" list` (add `--all` to include handled ones)
+- **Handled**: `node "$CLAUDE_PLUGIN_ROOT/scripts/remind.mjs" done <id>`
+- **Delete**: `node "$CLAUDE_PLUGIN_ROOT/scripts/remind.mjs" delete <id>`
+
+Reminders surface automatically in the conversation via the plugin's hook when due. Confirm to the user in one line what was set and when it will appear — no extra detail.
 
 ## Notes
 

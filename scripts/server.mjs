@@ -14,6 +14,9 @@
 //   POST /api/mark    { id, status: done|dismissed|open }
 //   POST /api/add     { summary, project }
 //   POST /api/update  { id, summary }
+//   POST /api/reminders/add   { message, kind, dueAt?, every?, project? }
+//   POST /api/reminders/done  { id }
+//   POST /api/reminders/delete { id }
 //
 // Env overrides (for tests): ADHD_DIR, ADHD_PROJECTS_DIR, CLAUDE_MEM_DB,
 // ADHD_PORT.
@@ -23,7 +26,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { loadConfig, loadIndex, markStatus, addItem, itemProject, updateItem } from './lib/store.mjs';
+import { loadConfig, loadIndex, markStatus, addItem, itemProject, updateItem, loadReminders, addReminder, reminderAction } from './lib/store.mjs';
 import { readClaudeMem } from './lib/clademem.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -81,6 +84,7 @@ function stateJson() {
     projects,
     current: projects[0]?.name || 'unknown',
     items: items.filter((i) => i.status !== 'dismissed'),
+    reminders: loadReminders().filter((r) => !r.done),
     last14,
   };
 }
@@ -164,6 +168,46 @@ export function startServer(portOverride) {
       const idx = loadIndex();
       if (!updateItem(idx, body.id, { summary: body.summary })) {
         return send(res, 404, JSON.stringify({ error: 'no such item or empty summary' }));
+      }
+      return send(res, 200, JSON.stringify({ ok: true }));
+    }
+
+    if (url === '/api/reminders/add' && req.method === 'POST') {
+      const body = await readBody(req);
+      if (!body?.message) return send(res, 400, JSON.stringify({ error: 'need message' }));
+      const kind = body.kind === 'recurring' || body.kind === 'random' ? body.kind
+        : 'once';
+      if (kind === 'recurring' && !['session', 'day'].includes(body.every)) {
+        return send(res, 400, JSON.stringify({ error: 'recurring needs every: session|day' }));
+      }
+      if (kind === 'once' && !body.dueAt) {
+        return send(res, 400, JSON.stringify({ error: 'once needs dueAt (ms epoch)' }));
+      }
+      const r = addReminder({
+        message: body.message,
+        kind,
+        dueAt: body.dueAt || null,
+        every: body.every || null,
+        project: body.project || null,
+      });
+      if (!r) return send(res, 400, JSON.stringify({ error: 'invalid message' }));
+      return send(res, 200, JSON.stringify({ ok: true, id: r.id }));
+    }
+
+    if (url === '/api/reminders/done' && req.method === 'POST') {
+      const body = await readBody(req);
+      if (!body?.id) return send(res, 400, JSON.stringify({ error: 'need id' }));
+      if (!reminderAction(body.id, 'done')) {
+        return send(res, 404, JSON.stringify({ error: 'no such reminder' }));
+      }
+      return send(res, 200, JSON.stringify({ ok: true }));
+    }
+
+    if (url === '/api/reminders/delete' && req.method === 'POST') {
+      const body = await readBody(req);
+      if (!body?.id) return send(res, 400, JSON.stringify({ error: 'need id' }));
+      if (!reminderAction(body.id, 'delete')) {
+        return send(res, 404, JSON.stringify({ error: 'no such reminder' }));
       }
       return send(res, 200, JSON.stringify({ ok: true }));
     }

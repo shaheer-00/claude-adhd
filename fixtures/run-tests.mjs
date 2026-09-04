@@ -124,9 +124,78 @@ check(
   JSON.parse(mark(['list', '--all'])).items.find((i) => i.id === target).status === 'dismissed'
 );
 
+// --- 6. reminders ---
+const dirC = fs.mkdtempSync(path.join(os.tmpdir(), 'adhd-rem-'));
+const remind = (args) => run('scripts/remind.mjs', args, { dir: dirC }).stdout.trim();
+const remList = (all) => JSON.parse(remind(['list', ...(all ? ['--all'] : [])])).items;
+
+// In-process store must read the same throwaway dir as the CLI children.
+process.env.ADHD_DIR = dirC;
+const store = await import(pathToFileURL(path.join(root, 'scripts', 'lib', 'store.mjs')));
+
+// once: future not due, past fires once and auto-dones
+// (100h future: must survive the 25h-ahead daily-reminder checks below)
+remind(['add', 'future once', '--in', '100h']);
+remind(['add', 'past once', '--in', '1s']);
+await new Promise((r) => setTimeout(r, 1100));
+let due = store.collectDueReminders('rem-s1', {}, Date.now());
+check('past-due once reminder fires', due.some((r) => r.message === 'past once'));
+check('future once reminder not due', !due.some((r) => r.message === 'future once'));
+due = store.collectDueReminders('rem-s1', {}, Date.now());
+check('once reminder auto-done after firing', !due.some((r) => r.message === 'past once'));
+
+// recurring session: fires on new session only
+remind(['add', 'standup note', '--every', 'session']);
+due = store.collectDueReminders('rem-s1', {}, Date.now());
+check('session reminder fires in new session', due.some((r) => r.message === 'standup note'));
+due = store.collectDueReminders('rem-s1', {}, Date.now());
+check('session reminder silent within same session', !due.some((r) => r.message === 'standup note'));
+due = store.collectDueReminders('rem-s2', {}, Date.now());
+check('session reminder fires again next session', due.some((r) => r.message === 'standup note'));
+
+// recurring day: fires, then cooldown blocks within the day
+remind(['add', 'daily water', '--every', 'day']);
+const nowMs = Date.now();
+due = store.collectDueReminders('rem-s1', {}, nowMs);
+check('daily reminder fires when new', due.some((r) => r.message === 'daily water'));
+due = store.collectDueReminders('rem-s1', {}, nowMs + 60 * 60 * 1000);
+check('daily reminder cooldown blocks same day', !due.some((r) => r.message === 'daily water'));
+due = store.collectDueReminders('rem-s1', {}, nowMs + 25 * 60 * 60 * 1000);
+check('daily reminder fires next day', due.some((r) => r.message === 'daily water'));
+
+// random: forced fire + cooldown
+remind(['add', 'random zen', '--random']);
+due = store.collectDueReminders('rem-s1', {}, Date.now(), { forceRandom: true });
+check('random reminder fires when forced', due.some((r) => r.message === 'random zen'));
+due = store.collectDueReminders('rem-s1', {}, Date.now(), { forceRandom: true });
+check('random reminder daily cooldown blocks', !due.some((r) => r.message === 'random zen'));
+
+// capture hook injects due reminders
+const dirD = fs.mkdtempSync(path.join(os.tmpdir(), 'adhd-rem-cap-'));
+run('scripts/remind.mjs', ['add', 'stretch break', '--in', '1s'], { dir: dirD });
+await new Promise((r) => setTimeout(r, 1100));
+const capCtx = JSON.parse(
+  run('hooks/capture.mjs', [], { dir: dirD, input: '{"session_id":"cap-rem"}' }).stdout
+).hookSpecificOutput.additionalContext;
+check('capture hook emits due reminder', capCtx.includes('stretch break'));
+check('capture hook keeps standing instruction', capCtx.includes('[claude-adhd tracking]'));
+check('capture instruction mentions remind.mjs', capCtx.includes('remind.mjs'));
+
+// CLI round-trip: done + delete
+const remItems = remList();
+const onceId = remItems.find((r) => r.message === 'future once').id;
+remind(['done', onceId]);
+check('reminder done removes from active list', !remList().some((r) => r.id === onceId));
+check('reminder done visible via --all', remList(true).some((r) => r.id === onceId && r.done));
+const zenId = remItems.find((r) => r.message === 'random zen').id;
+remind(['delete', zenId]);
+check('reminder delete removes everywhere', !remList(true).some((r) => r.id === zenId));
+
 // --- cleanup ---
 fs.rmSync(projDir, { recursive: true, force: true });
 fs.rmSync(dirA, { recursive: true, force: true });
 fs.rmSync(dirB, { recursive: true, force: true });
+fs.rmSync(dirC, { recursive: true, force: true });
+fs.rmSync(dirD, { recursive: true, force: true });
 console.log(failures === 0 ? '\nALL TESTS PASS' : `\n${failures} FAILURES`);
 process.exit(failures === 0 ? 0 : 1);

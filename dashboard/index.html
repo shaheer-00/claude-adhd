@@ -301,6 +301,25 @@
     .charts { grid-template-columns: 1fr; }
     .sync { width: 100%; margin-left: 0; }
   }
+  /* ============ reminders ============ */
+  .rem-addrow { flex-wrap: wrap; }
+  .rem-addrow #rem-msg { flex: 2; min-width: 180px; }
+  .rem-addrow #rem-at { flex: 0 1 175px; width: 175px; color-scheme: dark; }
+  .rem {
+    display: flex; gap: 12px; align-items: center; padding: 10px 12px; margin-bottom: 4px;
+    border-radius: 9px; border: 1px solid transparent;
+    transition: background .2s var(--ease), border-color .2s var(--ease);
+  }
+  .rem:hover { background: var(--panel-hover); border-color: var(--border); }
+  .rem.entering { animation: fadeUp .45s var(--ease) backwards; }
+  .rem .msg { flex: 1; min-width: 0; overflow-wrap: break-word; }
+  .rem .when { font-size: 11.5px; color: var(--accent); margin-left: 7px; white-space: nowrap; }
+  .rem .when.past { color: var(--open); }
+  .rem .tag.kind { color: var(--accent); border-color: rgba(91,140,255,.35); }
+  .rem.done { opacity: .45; }
+  .rem .btns button.del:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
+  .rem .btns button.del.confirm { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
+
   @media (prefers-reduced-motion: reduce) {
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   }
@@ -384,6 +403,22 @@
         <div class="addrow">
           <input id="add-input" placeholder="Add a task to this project…" maxlength="200" autocomplete="off">
           <button id="add-btn">Add</button>
+        </div>
+      </div>
+
+      <div class="panel" id="reminders-panel">
+        <h2>Reminders</h2>
+        <div id="reminders"><div class="skel"></div></div>
+        <div class="addrow rem-addrow">
+          <input id="rem-msg" placeholder="e.g. stretch, check the deploy, call mom…" maxlength="300" autocomplete="off">
+          <select id="rem-kind" title="Reminder type">
+            <option value="once">Once</option>
+            <option value="every-session">Every session</option>
+            <option value="every-day">Every day</option>
+            <option value="random">Random pop</option>
+          </select>
+          <input type="datetime-local" id="rem-at" class="hidden" title="When">
+          <button id="rem-add">Add</button>
         </div>
       </div>
 
@@ -490,7 +525,7 @@ async function refresh() {
     lastSync = Date.now();
     $('live').classList.remove('off');
     $('live-txt').textContent = 'live';
-    const sig = JSON.stringify([state.items, state.projects, state.claudemem?.available]);
+    const sig = JSON.stringify([state.items, state.projects, state.reminders, state.claudemem?.available]);
     if (sig !== lastRenderSig) { lastRenderSig = sig; render(); }
   } catch {
     $('live').classList.add('off');
@@ -519,6 +554,7 @@ function render() {
   renderProjects();
   renderCharts(s);
   renderItems();
+  renderReminders();
   renderClaudeMem();
 }
 
@@ -721,6 +757,92 @@ document.addEventListener('keydown', (e) => {
     if (document.activeElement === $('q')) { $('q').blur(); }
     else if (query) { $('q').value = ''; query = ''; renderItems(); }
   }
+});
+
+/* ---------- reminders ---------- */
+let seenRemIds = new Set();
+const KIND_LABEL = { once: 'once', recurring: 'recurring', random: 'random' };
+
+function remWhenHtml(r) {
+  const now = Date.now();
+  if (r.kind === 'once' && r.dueAt) {
+    const past = r.dueAt <= now;
+    const t = new Date(r.dueAt);
+    const sameDay = new Date(now).toDateString() === t.toDateString();
+    const str = sameDay
+      ? t.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+      : t.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+    return `<span class="when ${past ? 'past' : ''}">${past ? 'due ' : ''}${esc(str)}</span>`;
+  }
+  if (r.kind === 'recurring') return `<span class="when">${r.every === 'session' ? 'each session' : 'daily'}</span>`;
+  return `<span class="when">occasional</span>`;
+}
+
+function renderReminders() {
+  const box = $('reminders');
+  const rems = state.reminders || [];
+  box.innerHTML = rems.length
+    ? rems.map((r) => {
+        const isNew = !seenRemIds.has(r.id);
+        seenRemIds.add(r.id);
+        return `<div class="rem ${r.done ? 'done' : ''} ${isNew ? 'entering' : ''}" data-id="${r.id}">
+          <div class="msg">${esc(r.message)}<span class="tag kind">${KIND_LABEL[r.kind] || r.kind}</span>${r.project ? `<span class="tag proj-tag">${esc(r.project)}</span>` : ''}${remWhenHtml(r)}</div>
+          <div class="btns">
+            <button class="ok" data-rem="${r.id}" data-act="done" title="Mark handled">${ICON_CHECK}</button>
+            <button class="del" data-rem="${r.id}" data-act="delete" title="Delete">${ICON_X}</button>
+          </div>
+        </div>`;
+      }).join('')
+    : emptyHtml('No reminders', 'Tell Claude “remind me to…” or add one below.');
+  box.querySelectorAll('.btns button').forEach((b) =>
+    b.addEventListener('click', (e) => { e.stopPropagation(); remAct(b.dataset.rem, b.dataset.act, b); }));
+}
+
+async function remAct(id, action, btn) {
+  if (action === 'delete') {
+    if (!btn.classList.contains('confirm')) {
+      btn.classList.add('confirm');
+      btn.textContent = 'sure?';
+      const t = setTimeout(() => { btn.classList.remove('confirm'); btn.innerHTML = ICON_X; }, 2600);
+      confirmTimers.set(btn, t);
+      return;
+    }
+    clearTimeout(confirmTimers.get(btn));
+  }
+  const r = await api(`/api/reminders/${action}`, { id });
+  if (r.error) { toast(r.error, { type: 'warn' }); return; }
+  refresh();
+  toast(action === 'done' ? 'Reminder handled' : 'Reminder deleted', { ms: 2500 });
+}
+
+async function remAdd() {
+  const msg = $('rem-msg').value.trim();
+  if (!msg) return;
+  const kind = $('rem-kind').value;
+  const body = { message: msg };
+  if (kind === 'once') {
+    const at = $('rem-at').value;
+    if (!at) { toast('Pick a time for a once reminder', { type: 'warn' }); return; }
+    body.kind = 'once';
+    body.dueAt = new Date(at).getTime();
+  } else if (kind === 'random') {
+    body.kind = 'random';
+  } else {
+    body.kind = 'recurring';
+    body.every = kind === 'every-session' ? 'session' : 'day';
+  }
+  if (activeProject) body.project = activeProject;
+  const r = await api('/api/reminders/add', body);
+  if (r.error) { toast(r.error, { type: 'warn' }); return; }
+  $('rem-msg').value = '';
+  $('rem-at').value = '';
+  toast('Reminder added', { ms: 2500 });
+  refresh();
+}
+$('rem-add').addEventListener('click', remAdd);
+$('rem-msg').addEventListener('keydown', (e) => { if (e.key === 'Enter') remAdd(); });
+$('rem-kind').addEventListener('change', (e) => {
+  $('rem-at').classList.toggle('hidden', e.target.value !== 'once');
 });
 
 /* ---------- charts ---------- */

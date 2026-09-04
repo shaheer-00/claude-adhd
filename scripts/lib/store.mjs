@@ -24,6 +24,7 @@ export const DEFAULT_CONFIG = {
   digestOnStart: true,
   maxSessionsIndexed: 50,
   maxItemAgeDays: 90,
+  randomReminderProbability: 0.15,
 };
 
 export function loadConfig() {
@@ -161,9 +162,7 @@ export function updateItem(idx, id, { summary }, now = Date.now()) {
 
 function stateFile() {
   return path.join(adhdDir(), 'state.json');
-}
-
-export function sessionNudges(sessionId) {
+}export function sessionNudges(sessionId) {
   const st = readJson(stateFile(), {});
   const key = sessionId || 'unknown';
   return { ...st, key, count: Number(st[key]?.count || 0) };
@@ -194,4 +193,96 @@ export function humanAge(ts, now = Date.now()) {
 
 export function formatDate(ts) {
   return new Date(ts).toISOString().slice(0, 10);
+}
+
+// ---------- reminders (custom, user-authored) ----------
+
+function remindersFile() {
+  return path.join(adhdDir(), 'reminders.json');
+}
+
+export function loadReminders() {
+  const list = readJson(remindersFile(), []);
+  return Array.isArray(list) ? list : [];
+}
+
+export function saveReminders(list) {
+  writeJsonAtomic(remindersFile(), list);
+}
+
+export function addReminder(
+  { message, kind = 'once', dueAt = null, every = null, project = null, now = Date.now() }
+) {
+  const clean = String(message).replace(/\s+/g, ' ').trim().slice(0, 300);
+  if (!clean) return null;
+  if (!['once', 'recurring', 'random'].includes(kind)) return null;
+  const r = {
+    id: crypto.createHash('sha1').update(`${clean}::${now}`).digest('hex').slice(0, 16),
+    message: clean,
+    kind, // once | recurring | random
+    dueAt: kind === 'once' ? Number(dueAt) || null : null,
+    every, // session | day (recurring only)
+    project,
+    lastShown: null,
+    lastSession: null,
+    done: false,
+    doneAt: null,
+    createdAt: now,
+  };
+  const list = loadReminders();
+  list.push(r);
+  saveReminders(list);
+  return r;
+}
+
+// done | delete
+export function reminderAction(id, action, now = Date.now()) {
+  const list = loadReminders();
+  const i = list.findIndex((r) => r.id === id);
+  if (i < 0) return false;
+  if (action === 'delete') list.splice(i, 1);
+  else if (action === 'done') {
+    list[i].done = true;
+    list[i].doneAt = now;
+  } else return false;
+  saveReminders(list);
+  return true;
+}
+
+// Reminders due right now. Mutates shown-state (once: auto-done on fire;
+// recurring/random: cooldown stamps) and persists when anything fired.
+export function collectDueReminders(sessionId, config = {}, now = Date.now(), opts = {}) {
+  const list = loadReminders();
+  const randomP = config.randomReminderProbability ?? 0.15;
+  const due = [];
+  for (const r of list) {
+    if (r.done) continue;
+    let fire = false;
+    if (r.kind === 'once') {
+      if (r.dueAt && now >= r.dueAt) {
+        fire = true;
+        r.done = true;
+        r.doneAt = now;
+      }
+    } else if (r.kind === 'recurring' && r.every === 'session') {
+      if (r.lastSession !== sessionId) {
+        fire = true;
+        r.lastSession = sessionId;
+      }
+    } else if (r.kind === 'recurring' && r.every === 'day') {
+      if (!r.lastShown || now - r.lastShown >= DAY_MS) {
+        fire = true;
+        r.lastShown = now;
+      }
+    } else if (r.kind === 'random') {
+      const cooled = !r.lastShown || now - r.lastShown >= DAY_MS;
+      if (cooled && (opts.forceRandom || Math.random() < randomP)) {
+        fire = true;
+        r.lastShown = now;
+      }
+    }
+    if (fire) due.push(r);
+  }
+  if (due.length) saveReminders(list);
+  return due;
 }
