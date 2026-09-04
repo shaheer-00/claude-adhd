@@ -17,6 +17,8 @@ import {
   digestItems,
   markReminded,
   humanAge,
+  itemAgeDays,
+  AGING_DAYS,
 } from '../scripts/lib/store.mjs';
 
 // Start the dashboard server (detached) if it isn't already running.
@@ -90,15 +92,28 @@ async function main() {
   // prompt-submit nudges don't immediately repeat the same items.
   for (const it of items) markReminded(idx, it.id, now);
 
-  const lines = items.map(
-    (it) => `- (${humanAge(it.timestamp, now)}) ${it.summary}`
+  // Wrap-up: what finished since the previous session (last 36h keeps it
+  // to "since you were last here" without reaching back days).
+  const recentDone = idx.items.filter(
+    (i) => i.status === 'done' && i.statusChangedAt && now - i.statusChangedAt < 36 * 60 * 60 * 1000
   );
+  const wrapLine = recentDone.length
+    ? `Since your last visit: ${recentDone.length} task${recentDone.length > 1 ? 's' : ''} finished.`
+    : '';
+
+  const lines = items.map((it) => {
+    const old = itemAgeDays(it.timestamp, now) >= AGING_DAYS;
+    return `- (${old ? 'aging, ' : ''}${humanAge(it.timestamp, now)}) ${it.summary}`;
+  });
 
   const additionalContext = [
     '[claude-adhd] Open threads from past sessions (user may have ADHD; these may be forgotten):',
     ...lines,
+    wrapLine,
     'Guidance: mention at most briefly, only if the user seems unsure what to do next or says they are bored/looking for something. One line each, no lecturing, no pressure. Never list all of them unprompted.',
-  ].join('\n');
+  ]
+    .filter(Boolean)
+    .join('\n');
 
   emit(additionalContext);
 }

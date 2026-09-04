@@ -66,6 +66,19 @@
   .live.off .dot { background: var(--faint); }
   .live.off .dot::after { animation: none; }
   .sync { font-size: 11.5px; color: var(--faint); margin-left: auto; }
+  .focus-pill {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600;
+    color: #a8c0ff; background: var(--accent-soft); border: 1px solid rgba(91,140,255,.4);
+    border-radius: 999px; padding: 4px 12px;
+    animation: pillIn .5s var(--ease);
+  }
+  @keyframes pillIn { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
+  .tag.energy { color: var(--open); border-color: rgba(230,180,80,.35); }
+  .tag.energy.high { color: #ff9d6b; border-color: rgba(255,157,107,.35); }
+  .editrow select {
+    background: var(--panel-solid); border: 1px solid var(--border); color: var(--muted);
+    border-radius: 8px; padding: 7px 8px; font: 12px inherit; outline: none; font-family: inherit;
+  }
 
   /* ============ stats ============ */
   .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
@@ -337,6 +350,7 @@
     </div>
     <h1>Claude ADHD</h1>
     <span class="live" id="live"><span class="dot"></span><span id="live-txt">connecting</span></span>
+    <span class="focus-pill hidden" id="focus-pill" title="Focus session"></span>
     <span class="sync num" id="sync"></span>
   </header>
 
@@ -345,7 +359,8 @@
     <div class="card done"><div class="num" id="s-done">–</div><div class="lbl">Finished</div></div>
     <div class="card accent"><div class="num" id="s-pct">–</div><div class="lbl">Finished %</div></div>
     <div class="card done"><div class="num" id="s-today">–</div><div class="lbl">Done today</div></div>
-    <div class="card"><div class="num" id="s-total">–</div><div class="lbl">Tracked total</div></div>
+    <div class="card"><div class="num" id="s-week">–</div><div class="lbl">Done this week</div></div>
+    <div class="card"><div class="num" id="s-streak">–</div><div class="lbl">Day streak</div></div>
   </div>
 
   <div class="toolbar">
@@ -547,15 +562,27 @@ function render() {
   setNum($('s-done'), s.done);
   setNum($('s-pct'), s.finishedPct, '%');
   setNum($('s-today'), s.doneToday);
-  setNum($('s-total'), s.total);
+  setNum($('s-week'), state.week?.done7 ?? 0);
+  setNum($('s-streak'), state.streak ?? 0);
   $('c-open').textContent = s.open ? `(${s.open})` : '';
   $('c-done').textContent = s.done ? `(${s.done})` : '';
 
+  renderFocusPill();
   renderProjects();
   renderCharts(s);
   renderItems();
   renderReminders();
   renderClaudeMem();
+}
+
+function renderFocusPill() {
+  const pill = $('focus-pill');
+  const f = state.focus;
+  if (!f || !f.active) { pill.classList.add('hidden'); return; }
+  pill.classList.remove('hidden');
+  if (f.phase === 'ended') { pill.textContent = '◎ focus ended'; return; }
+  const min = Math.max(1, Math.round(f.remainingMs / 60000));
+  pill.textContent = `◎ focus · ${min}m${f.label ? ' · ' + f.label : ''}`;
 }
 
 function renderProjects() {
@@ -634,16 +661,22 @@ function itemHtml(i) {
        <button class="no" data-id="${i.id}" data-act="dismiss" title="Dismiss">${ICON_X}</button>`
     : `<button class="rev" data-id="${i.id}" data-act="open" title="Reopen">${ICON_UNDO}</button>`;
   const projTag = activeProject ? '' : `<span class="tag proj-tag">${esc(i.project || 'unknown')}</span>`;
+  const energyTag = i.energy ? `<span class="tag energy ${i.energy}">${i.energy} energy</span>` : '';
   return `
   <div class="item-row-wrap ${exp ? 'expanded' : ''}">
     <div class="item ${isDone ? 'done' : ''} ${isNew ? 'entering' : ''}" data-id="${i.id}">
       <div class="age">${isDone ? age(i.statusChangedAt) : age(i.timestamp)}</div>
-      <div class="sum"><span class="txt">${esc(i.summary)}</span><span class="tag">${esc(i.source || 'indexer')}</span>${projTag}</div>
+      <div class="sum"><span class="txt">${esc(i.summary)}</span><span class="tag">${esc(i.source || 'indexer')}</span>${energyTag}${projTag}</div>
       <div class="btns">${btns}</div>
     </div>
     <div class="detail"><div class="detail-inner"><div class="detail-body">
       <div class="editrow">
         <input class="edit-input" data-id="${i.id}" value="${esc(i.summary)}" maxlength="200" spellcheck="false">
+        <select class="edit-energy" data-id="${i.id}" title="Energy">
+          <option value="" ${!i.energy ? 'selected' : ''}>— energy</option>
+          <option value="low" ${i.energy === 'low' ? 'selected' : ''}>low</option>
+          <option value="high" ${i.energy === 'high' ? 'selected' : ''}>high</option>
+        </select>
         <button class="mini-btn primary" data-edit="${i.id}">Save</button>
       </div>
       <div class="meta">
@@ -712,10 +745,12 @@ async function act(id, action, btn) {
 
 async function saveEdit(id) {
   const inp = document.querySelector(`.edit-input[data-id="${id}"]`);
+  const sel = document.querySelector(`.edit-energy[data-id="${id}"]`);
   if (!inp) return;
   const val = inp.value.trim();
   if (!val) { toast('Summary can’t be empty', { type: 'warn' }); return; }
-  const r = await api('/api/update', { id, summary: val });
+  const energy = sel ? (sel.value || null) : undefined;
+  const r = await api('/api/update', { id, summary: val, energy });
   if (r.error) { toast(r.error, { type: 'warn' }); return; }
   toast('Saved', { ms: 2500 });
   refresh();

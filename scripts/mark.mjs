@@ -3,9 +3,8 @@
 // the live-capture hook instruction, and the dashboard.
 //
 // Usage:
-//   node mark.mjs list                 # list open items (JSON)
-//   node mark.mjs list --all           # include done/dismissed
-//   node mark.mjs add "<summary>" [--project <name>]
+//   node mark.mjs list [--all] [--energy low|high]   # list items (JSON)
+//   node mark.mjs add "<summary>" [--project <name>] [--energy low|high]
 //   node mark.mjs done <id>            # mark item done
 //   node mark.mjs dismiss <id>         # permanently dismiss item
 //   node mark.mjs open <id>            # reopen item
@@ -33,18 +32,21 @@ if (!cmd) usage();
 
 if (cmd === 'list') {
   const all = rest.includes('--all');
+  const energy = flag('energy');
+  if (energy && !['low', 'high'].includes(energy)) usage();
   const idx = loadIndex();
-  const items = (all ? idx.items : idx.items.filter((i) => i.status === 'open')).map((i) => ({
-    ...i,
-    project: itemProject(i),
-  }));
+  let items = all ? idx.items : idx.items.filter((i) => i.status === 'open');
+  if (energy) items = items.filter((i) => i.energy === energy);
+  items = items.map((i) => ({ ...i, project: itemProject(i) }));
   console.log(JSON.stringify({ items }, null, 2));
 } else if (cmd === 'add') {
   const summary = rest.find((a) => !a.startsWith('--'));
   if (!summary) usage();
   const project = flag('project') || process.cwd().split(/[\\/]/).filter(Boolean).pop() || 'unknown';
+  const energy = flag('energy');
+  if (energy && !['low', 'high'].includes(energy)) usage();
   const idx = loadIndex();
-  const item = addItem(idx, { summary, project, source: 'capture' });
+  const item = addItem(idx, { summary, project, source: 'capture', energy: energy || null });
   if (!item) {
     console.error('duplicate or empty summary');
     process.exit(1);

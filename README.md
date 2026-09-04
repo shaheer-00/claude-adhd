@@ -2,11 +2,14 @@
 
 A Claude Code plugin for ADHD brains. It remembers the things you said but never finished — tasks, ideas, half-asked questions from past sessions — and brings them back gently:
 
-- **Session digest** — when you start a session, it quietly surfaces the 1–3 most stale open threads.
+- **Session digest** — when you start a session, it quietly surfaces the 1–3 most stale open threads, flags anything aging (2+ weeks), and notes what you finished since last visit.
 - **Random nudges** — when your chat drifts into brainstorming or boredom, it occasionally drops a one-line "btw, you left this open" — never pushy, never more than twice per session.
 - **Live capture** — when you commit to a task mid-chat, Claude silently records it, and marks it done when finished. No more "wait, what did we decide yesterday?"
 - **Custom reminders** — tell Claude "remind me tomorrow at 3pm to check the deploy", "every session remind me to run tests first", or "occasionally remind me to stretch" — they surface naturally in the conversation when due. Also `/remind`.
-- **Dashboard** — a local web page (auto-started on session start) with projects, stats, graphs, reminders, and mark done/dismiss/resume buttons.
+- **Focus mode** — `/focus 25 [task]`: timed focus session. The plugin redirects you when the chat drifts, and wraps up with a summary when time's up.
+- **Energy-aware** — tag tasks low/high energy. Say "I'm fried" and it only offers low-effort tasks.
+- **Unanswered follow-ups** — sessions that ended on a question you never answered get surfaced: "you never replied to..."
+- **Dashboard** — a local web page (auto-started on session start) with projects, stats, graphs, day streak, reminders, energy tags, and mark done/dismiss/resume buttons.
 - **`/remind-me`** — on demand: "what did I forget?" gets you a ranked list of open threads, and you can resume one, mark it done, or dismiss it forever.
 
 ## Install
@@ -57,13 +60,31 @@ node scripts/remind.mjs list                                           # see wha
 
 Reminders live in `~/.claude/adhd/reminders.json`. Set `"reminders": false` in the config to turn injection off.
 
+## Focus mode
+
+```bash
+/focus 25 ship the release      # in Claude Code (or just "focus on shipping for 25")
+node scripts/focus.mjs start 25 "ship the release"
+node scripts/focus.mjs status | stop
+```
+
+While active, the plugin's hook nudges the conversation back if it drifts, and announces a wrap-up when time's up. Config kill switch: `"focus": false`.
+
+## Energy tags
+
+Tag tasks when capturing (`--energy low|high`, or the dashboard's edit panel). Then:
+
+- Tell Claude "I'm fried" / "no energy" — it only offers low-energy open tasks
+- `node scripts/mark.mjs list --energy low`
+
 ## Dashboard
 
 Start a session (or run `node scripts/server.mjs`) and open **http://127.0.0.1:37987**:
 
-- projects list, current project, finished-vs-open stats
+- projects list, current project, finished-vs-open stats, day streak, this-week summary
 - 14-day completion/added graphs (inline SVG, no CDN)
-- mark items done / dismissed / reopen, add new ones
+- reminders panel: add/edit/handled/delete
+- mark items done / dismissed / reopen, add new ones, tag energy
 
 Bound to `127.0.0.1` only. No network exposure, no telemetry. If you use [claude-mem](https://github.com/thedotmack/claude-mem), its per-project open threads are merged into the dashboard automatically (read-only).
 
@@ -94,7 +115,8 @@ Everything stays on your machine. The scripts read your local Claude Code transc
 
 - `/remind-me [topic]` — list forgotten open threads, optionally filtered by topic
 - `/remind <message> [at <time> | every session|day | random]` — set a custom reminder
-- Or just say "remind me", "what did I forget?", "what's unfinished?", "remind me to X at Y" — the skill triggers on those too.
+- `/focus [minutes] [task]` — start a timed focus session
+- Or just say "remind me", "what did I forget?", "remind me to X at Y", "focus on X", "I'm fried" — the skill triggers on those too.
 
 ## Tips
 

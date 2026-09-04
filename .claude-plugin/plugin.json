@@ -1,7 +1,7 @@
 {
   "name": "claude-adhd",
-  "version": "0.3.0",
-  "description": "Gentle reminders for unfinished threads from past sessions — built for ADHD brains. Session-start digest, random nudges when the chat drifts, live task capture, local dashboard, and /remind-me on demand.",
+  "version": "0.4.0",
+  "description": "Gentle reminders for unfinished threads from past sessions — built for ADHD brains. Digest + nudges, live capture, custom reminders, focus mode, energy-aware task matching, and a local dashboard.",
   "author": {
     "name": "shaheer"
   },

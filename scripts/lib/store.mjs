@@ -114,7 +114,7 @@ export function itemProject(it) {
 }
 
 // Record a new tracked task (live capture by the model, or the dashboard).
-export function addItem(idx, { summary, project, source = 'capture', sessionPath = null, now = Date.now() }) {
+export function addItem(idx, { summary, project, source = 'capture', sessionPath = null, energy = null, now = Date.now() }) {
   const clean = String(summary).replace(/\s+/g, ' ').trim().slice(0, 200);
   if (!clean) return null;
   const id = itemId(clean, sessionPath || project || 'capture');
@@ -131,6 +131,7 @@ export function addItem(idx, { summary, project, source = 'capture', sessionPath
     status: 'open',
     lastReminded: null,
     origin: 'capture',
+    energy: ['low', 'high'].includes(energy) ? energy : null,
   };
   idx.items.push(item);
   saveIndex(idx);
@@ -146,13 +147,19 @@ export function markStatus(idx, id, status, now = Date.now()) {
   return true;
 }
 
-// Edit an item's summary (dashboard inline edit).
-export function updateItem(idx, id, { summary }, now = Date.now()) {
+// Edit an item's summary and/or energy (dashboard inline edit).
+export function updateItem(idx, id, { summary, energy }, now = Date.now()) {
   const it = idx.items.find((i) => i.id === id);
   if (!it) return false;
-  const clean = String(summary).replace(/\s+/g, ' ').trim().slice(0, 200);
-  if (!clean) return false;
-  it.summary = clean;
+  if (summary !== undefined) {
+    const clean = String(summary).replace(/\s+/g, ' ').trim().slice(0, 200);
+    if (!clean) return false;
+    it.summary = clean;
+  }
+  if (energy !== undefined) {
+    if (!['low', 'high', null].includes(energy)) return false;
+    it.energy = energy;
+  }
   it.editedAt = now;
   saveIndex(idx);
   return true;
@@ -286,3 +293,73 @@ export function collectDueReminders(sessionId, config = {}, now = Date.now(), op
   if (due.length) saveReminders(list);
   return due;
 }
+
+// ---------- focus mode ----------
+
+function focusFile() {
+  return path.join(adhdDir(), 'focus.json');
+}
+
+export function loadFocus() {
+  return readJson(focusFile(), { active: false });
+}
+
+export function saveFocus(f) {
+  writeJsonAtomic(focusFile(), f);
+}
+
+export function startFocus(minutes, label = null, now = Date.now()) {
+  const mins = Math.max(1, Math.min(240, Number(minutes) || 25));
+  const f = {
+    active: true,
+    startedAt: now,
+    activeUntil: now + mins * 60_000,
+    label: label ? String(label).slice(0, 200) : null,
+    wrappedUp: false,
+  };
+  saveFocus(f);
+  return f;
+}
+
+export function stopFocus() {
+  saveFocus({ active: false, endedAt: Date.now() });
+}
+
+// Current focus phase: 'off' | 'active' | 'ended' (just expired, wrap-up
+// pending — returned exactly once, then marked wrapped up).
+export function focusPhase(now = Date.now()) {
+  const f = loadFocus();
+  if (!f.active || !f.activeUntil) return { phase: 'off' };
+  if (now < f.activeUntil) {
+    return { ...f, phase: 'active', remainingMs: f.activeUntil - now };
+  }
+  if (f.wrappedUp) return { phase: 'off' };
+  f.wrappedUp = true;
+  saveFocus(f);
+  return { ...f, phase: 'ended' };
+}
+
+// ---------- streaks + aging ----------
+
+// Consecutive days (ending today or yesterday) with at least one item done.
+export function doneStreak(items, now = Date.now()) {
+  const days = new Set(
+    items
+      .filter((i) => i.status === 'done' && i.statusChangedAt)
+      .map((i) => new Date(i.statusChangedAt).toDateString())
+  );
+  const d = new Date(now);
+  if (!days.has(d.toDateString())) d.setDate(d.getDate() - 1);
+  let streak = 0;
+  while (days.has(d.toDateString())) {
+    streak++;
+    d.setDate(d.getDate() - 1);
+  }
+  return streak;
+}
+
+export function itemAgeDays(ts, now = Date.now()) {
+  return Math.floor((now - (ts || 0)) / DAY_MS);
+}
+
+export const AGING_DAYS = 14;

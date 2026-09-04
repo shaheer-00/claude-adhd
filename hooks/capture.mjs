@@ -15,7 +15,7 @@
 
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { loadConfig, collectDueReminders } from '../scripts/lib/store.mjs';
+import { loadConfig, collectDueReminders, focusPhase } from '../scripts/lib/store.mjs';
 
 function emit(additionalContext) {
   process.stdout.write(
@@ -82,6 +82,21 @@ async function main() {
       parts.push(
         '[claude-adhd reminders] The user asked to be reminded of these. Relay them now, woven into the conversation naturally (one line each, no meta-explanation, no pressure):\n' +
           lines.join('\n')
+      );
+    }
+  }
+
+  if (config.focus !== false && !process.env.ADHD_NO_FOCUS) {
+    const f = focusPhase();
+    if (f.phase === 'active') {
+      const end = new Date(f.activeUntil).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+      const left = Math.max(1, Math.round(f.remainingMs / 60_000));
+      parts.push(
+        `[claude-adhd focus] Focus session active until ${end} (${left} min left)${f.label ? ` on: ${f.label}` : ''}. Keep the user on this task: if the conversation drifts to something unrelated, redirect gently in one line, no scolding.`
+      );
+    } else if (f.phase === 'ended') {
+      parts.push(
+        '[claude-adhd focus] Focus session just ended. Briefly acknowledge what got done, ask if they want to start another (or a break), then continue normally.'
       );
     }
   }

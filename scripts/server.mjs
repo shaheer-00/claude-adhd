@@ -26,7 +26,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { loadConfig, loadIndex, markStatus, addItem, itemProject, updateItem, loadReminders, addReminder, reminderAction } from './lib/store.mjs';
+import { loadConfig, loadIndex, markStatus, addItem, itemProject, updateItem, loadReminders, addReminder, reminderAction, loadFocus, doneStreak } from './lib/store.mjs';
 import { readClaudeMem } from './lib/clademem.mjs';
 
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -71,6 +71,23 @@ function stateJson() {
     });
   }
 
+  // This week (7 days): done/added counts + most active project.
+  const weekAgo = now - 7 * DAY;
+  const done7 = items.filter((i) => i.status === 'done' && (i.statusChangedAt || 0) >= weekAgo).length;
+  const added7 = items.filter((i) => (i.timestamp || 0) >= weekAgo).length;
+  const projCount = new Map();
+  for (const i of items) {
+    if ((i.timestamp || 0) >= weekAgo) projCount.set(i.project, (projCount.get(i.project) || 0) + 1);
+  }
+  const topProject = [...projCount.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+
+  const focusRaw = loadFocus();
+  const focus = focusRaw.active
+    ? now >= focusRaw.activeUntil
+      ? { active: true, phase: 'ended', label: focusRaw.label }
+      : { active: true, phase: 'active', label: focusRaw.label, remainingMs: focusRaw.activeUntil - now, until: focusRaw.activeUntil }
+    : { active: false, phase: 'off' };
+
   return {
     now,
     stats: {
@@ -85,6 +102,9 @@ function stateJson() {
     current: projects[0]?.name || 'unknown',
     items: items.filter((i) => i.status !== 'dismissed'),
     reminders: loadReminders().filter((r) => !r.done),
+    week: { done7, added7, topProject },
+    streak: doneStreak(items, now),
+    focus,
     last14,
   };
 }
@@ -162,11 +182,14 @@ export function startServer(portOverride) {
 
     if (url === '/api/update' && req.method === 'POST') {
       const body = await readBody(req);
-      if (!body?.id || !body?.summary) {
-        return send(res, 400, JSON.stringify({ error: 'need id and summary' }));
+      if (!body?.id || (!body?.summary && body?.energy === undefined)) {
+        return send(res, 400, JSON.stringify({ error: 'need id and summary or energy' }));
       }
       const idx = loadIndex();
-      if (!updateItem(idx, body.id, { summary: body.summary })) {
+      const patch = {};
+      if (body.summary !== undefined) patch.summary = body.summary;
+      if (body.energy !== undefined) patch.energy = body.energy;
+      if (!updateItem(idx, body.id, patch)) {
         return send(res, 404, JSON.stringify({ error: 'no such item or empty summary' }));
       }
       return send(res, 200, JSON.stringify({ ok: true }));

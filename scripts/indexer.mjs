@@ -22,6 +22,7 @@ import {
 
 const MAX_FILE_BYTES = 1024 * 1024; // skip huge transcripts
 const MAX_SUMMARY_LEN = 200;
+const PENDING_REPLY_FRESH_MS = 30 * 60 * 1000; // ignore sessions touched this recently
 
 export const TASK_PATTERNS = [
   /\bi(?:'ll| will| gonna| need to| have to| should| want to)\b[^.!?]{3,120}\b(later|tomorrow|next time|soon|eventually)\b/i,
@@ -76,6 +77,34 @@ function cleanSummary(text) {
 
 export function looksLikeCommand(text) {
   return SKIP_PREFIXES.some((p) => text.startsWith(p));
+}
+
+// Plain text of an assistant message (text blocks only, no tool use).
+export function assistantText(entry) {
+  if (entry.type !== 'assistant' || !entry.message) return '';
+  const content = entry.message.content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .filter((b) => b && b.type === 'text' && typeof b.text === 'string')
+    .map((b) => b.text)
+    .join(' ')
+    .trim();
+}
+
+// A session ends with Claude asking the user something and the user never
+// answering — a thread that dies awaiting a reply.
+export function extractPendingReply(lines) {
+  let last = null; // last meaningful message: {role: 'user'|'assistant', text}
+  for (const entry of lines) {
+    const u = userText(entry).trim();
+    if (u && !looksLikeCommand(u)) { last = { role: 'user', text: u }; continue; }
+    const a = assistantText(entry);
+    if (a) last = { role: 'assistant', text: a };
+  }
+  if (!last || last.role !== 'assistant') return null;
+  if (!/\?/.test(last.text)) return null;
+  if (last.text.length < 15 || last.text.length > 600) return null;
+  return { summary: cleanSummary(last.text) };
 }
 
 export function extractCandidates(lines) {
@@ -249,6 +278,29 @@ export function runIndex(force = false) {
         origin: cand.question ? 'question' : 'task',
       });
       added++;
+    }
+
+    // Pending reply: session ended on an unanswered Claude question.
+    // Skip fresh sessions — the user may just be mid-conversation.
+    if (Date.now() - t.mtime > PENDING_REPLY_FRESH_MS) {
+      const pending = extractPendingReply(lines);
+      if (pending) {
+        const pid = itemId(`reply::${pending.summary}`, key);
+        if (!idx.items.some((it) => it.id === pid)) {
+          idx.items.push({
+            id: pid,
+            summary: pending.summary,
+            sessionPath: key,
+            sessionKey: key,
+            sessionTs,
+            timestamp: sessionTs,
+            status: 'open',
+            lastReminded: null,
+            origin: 'pending-reply',
+          });
+          added++;
+        }
+      }
     }
   }
 

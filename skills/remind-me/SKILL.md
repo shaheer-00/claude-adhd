@@ -1,6 +1,6 @@
 ---
 name: remind-me
-description: Surface unfinished or forgotten tasks, ideas, and open questions from the user's past Claude Code sessions, and manage custom reminders. Use when the user says "remind me", "what did I forget", "what's unfinished", "what was I working on", "did I leave anything open", "set a reminder", "remind me to", or invokes /remind-me or /remind. Especially useful for users with ADHD.
+description: Surface unfinished or forgotten tasks, ideas, and open questions from the user's past Claude Code sessions, manage custom reminders, run focus sessions, and match tasks to the user's energy. Use when the user says "remind me", "what did I forget", "what's unfinished", "what was I working on", "set a reminder", "remind me to", "focus", "/focus", "I'm fried / no energy", or invokes /remind-me or /remind. Especially useful for users with ADHD.
 ---
 
 # Remind me — forgotten open threads
@@ -56,6 +56,25 @@ If the user's request is about setting or managing reminders (not past threads),
 - **Delete**: `node "$CLAUDE_PLUGIN_ROOT/scripts/remind.mjs" delete <id>`
 
 Reminders surface automatically in the conversation via the plugin's hook when due. Confirm to the user in one line what was set and when it will appear — no extra detail.
+
+## Focus mode
+
+Timed focus sessions — the plugin's hook redirects drift and announces the wrap-up automatically; the CLI only starts/stops them.
+
+- **Start**: `node "$CLAUDE_PLUGIN_ROOT/scripts/focus.mjs" start [minutes] [task label...]` (default 25)
+- **Status**: `node "$CLAUDE_PLUGIN_ROOT/scripts/focus.mjs" status`
+- **Stop early**: `node "$CLAUDE_PLUGIN_ROOT/scripts/focus.mjs" stop`
+
+During a session: keep the user on their task. When the hook announces the session ended, summarize what got done.
+
+## Low-energy mode
+
+When the user says they're drained ("I'm fried", "no energy", "brain is mush"):
+
+1. `node "$CLAUDE_PLUGIN_ROOT/scripts/mark.mjs" list --energy low` — only low-energy open tasks
+2. Offer 1-3 of those, nothing else. No high-effort suggestions, no guilt.
+
+When recording tasks, if the user signals effort ("quick", "small", "easy" → low; "big", "deep", "hard" → high), pass `--energy low|high` to `mark.mjs add`.
 
 ## Notes
 

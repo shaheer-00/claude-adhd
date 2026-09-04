@@ -72,6 +72,7 @@ check(
 
 // --- 3. unfocused detection ---
 const unfocused = await import(pathToFileURL(path.join(root, 'hooks', 'prompt-submit.mjs')));
+const indexer = await import(pathToFileURL(path.join(root, 'scripts', 'indexer.mjs')));
 check(
   'drifty transcript detected as unfocused',
   unfocused.looksUnfocused(
@@ -191,11 +192,90 @@ const zenId = remItems.find((r) => r.message === 'random zen').id;
 remind(['delete', zenId]);
 check('reminder delete removes everywhere', !remList(true).some((r) => r.id === zenId));
 
+// --- 7. focus mode ---
+const dirE = fs.mkdtempSync(path.join(os.tmpdir(), 'adhd-focus-'));
+process.env.ADHD_DIR = dirE; // in-process store reads this too
+const focusCli = (args) => run('scripts/focus.mjs', args, { dir: dirE }).stdout.trim();
+
+focusCli(['start', '25', 'ship it']);
+let fstate = store.focusPhase();
+check('focus starts active', fstate.phase === 'active' && fstate.label === 'ship it');
+check('focus remaining ~25m', Math.abs(fstate.remainingMs - 25 * 60_000) < 5000);
+// expire by writing past activeUntil
+fs.writeFileSync(path.join(dirE, 'focus.json'), JSON.stringify({ active: true, startedAt: Date.now() - 7e6, activeUntil: Date.now() - 1000, label: 'ship it', wrappedUp: false }));
+fstate = store.focusPhase();
+check('expired focus returns ended once', fstate.phase === 'ended');
+fstate = store.focusPhase();
+check('ended only once, then off', fstate.phase === 'off');
+// capture hook injects active focus
+focusCli(['start', '10', 'stay on task']);
+const focusCtx = JSON.parse(
+  run('hooks/capture.mjs', [], { dir: dirE, input: '{"session_id":"f"}' }).stdout
+).hookSpecificOutput.additionalContext;
+check('capture hook injects focus context', focusCtx.includes('[claude-adhd focus] Focus session active'));
+check('focus context has label', focusCtx.includes('stay on task'));
+focusCli(['stop']);
+check('focus stop clears', store.focusPhase().phase === 'off');
+
+// --- 8. streak + aging ---
+check('streak counts consecutive done days', store.doneStreak([
+  { status: 'done', statusChangedAt: Date.now() },
+  { status: 'done', statusChangedAt: Date.now() - 86400000 },
+  { status: 'done', statusChangedAt: Date.now() - 2 * 86400000 },
+]) === 3);
+check('streak survives today missing', store.doneStreak([
+  { status: 'done', statusChangedAt: Date.now() - 86400000 },
+]) === 1);
+check('streak zero when gap', store.doneStreak([
+  { status: 'done', statusChangedAt: Date.now() - 3 * 86400000 },
+]) === 0);
+
+// --- 9. energy tagging ---
+const dirF = fs.mkdtempSync(path.join(os.tmpdir(), 'adhd-energy-'));
+const markF = (args) => run('scripts/mark.mjs', args, { dir: dirF }).stdout.trim();
+markF(['add', 'quick README tweak', '--energy', 'low', '--project', 'P']);
+markF(['add', 'big refactor job', '--energy', 'high', '--project', 'P']);
+const lowItems = JSON.parse(markF(['list', '--energy', 'low'])).items;
+check('energy filter returns only low', lowItems.length === 1 && lowItems[0].summary === 'quick README tweak');
+check('energy stored on add', JSON.parse(markF(['list'])).items.find((i) => i.summary === 'big refactor job').energy === 'high');
+
+// --- 10. pending-reply extraction ---
+const pendingLines = [
+  { type: 'user', message: { role: 'user', content: 'hey can you look at the auth flow?' } },
+  { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'Sure. Do you want me to also rotate the tokens while I am in there?' }] } },
+];
+check('pending reply extracted from trailing assistant question',
+  indexer.extractPendingReply(pendingLines)?.summary.includes('rotate the tokens'));
+const answeredLines = [...pendingLines, { type: 'user', message: { role: 'user', content: 'yes rotate them' } }];
+check('no pending reply when user answered', indexer.extractPendingReply(answeredLines) === null);
+const noQuestion = [
+  { type: 'assistant', message: { role: 'assistant', content: [{ type: 'text', text: 'All done, the build is green.' }] } },
+];
+check('no pending reply without question', indexer.extractPendingReply(noQuestion) === null);
+
+// --- 11. aging marker in digest ---
+const dirG = fs.mkdtempSync(path.join(os.tmpdir(), 'adhd-aging-'));
+process.env.ADHD_DIR = dirG;
+run('scripts/indexer.mjs', [], { dir: dirG });
+// age every open item past the aging threshold, then force digest
+const agingFile = path.join(dirG, 'index.json');
+const agingIdx = JSON.parse(fs.readFileSync(agingFile, 'utf8'));
+const OLD = 20 * 24 * 60 * 60 * 1000;
+for (const it of agingIdx.items) if (it.status === 'open') it.timestamp = Date.now() - OLD;
+fs.writeFileSync(agingFile, JSON.stringify(agingIdx));
+const agingDigest = JSON.parse(
+  run('hooks/session-start.mjs', [], { dir: dirG, input: '{}\n', extra: { ADHD_FORCE_DIGEST: '1' } }).stdout
+).hookSpecificOutput.additionalContext;
+check('aging items flagged in digest', /aging, \d+ (days|weeks) ago/.test(agingDigest));
+
 // --- cleanup ---
 fs.rmSync(projDir, { recursive: true, force: true });
 fs.rmSync(dirA, { recursive: true, force: true });
 fs.rmSync(dirB, { recursive: true, force: true });
 fs.rmSync(dirC, { recursive: true, force: true });
 fs.rmSync(dirD, { recursive: true, force: true });
+fs.rmSync(dirE, { recursive: true, force: true });
+fs.rmSync(dirF, { recursive: true, force: true });
+fs.rmSync(dirG, { recursive: true, force: true });
 console.log(failures === 0 ? '\nALL TESTS PASS' : `\n${failures} FAILURES`);
 process.exit(failures === 0 ? 0 : 1);
