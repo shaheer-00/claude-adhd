@@ -1,5 +1,7 @@
 # Claude ADHD
 
+> ⚠️ **This plugin is in test mode** — under active development and testing. Expect rough edges, and back up anything important before relying on it.
+
 A Claude Code plugin for ADHD brains. It remembers the things you said but never finished — tasks, ideas, half-asked questions from past sessions — and brings them back gently:
 
 - **Session digest** — when you start a session, it quietly surfaces the 1–3 most stale open threads, flags anything aging (2+ weeks), and notes what you finished since last visit.
@@ -15,7 +17,7 @@ A Claude Code plugin for ADHD brains. It remembers the things you said but never
 ## Install
 
 ```bash
-/plugin marketplace add <github-owner>/claude-adhd
+/plugin marketplace add shaheer-00/claude-adhd
 /plugin install claude-adhd@claude-adhd
 ```
 
@@ -133,3 +135,7 @@ node scripts/mark.mjs list             # see what's open
 node scripts/remind.mjs list           # see active reminders
 node scripts/server.mjs                # dashboard (http://127.0.0.1:37987)
 ```
+
+## Support
+
+If this plugin helps you focus, you can [buy me a coffee](https://buymeacoffee.com/shaheer0.0) ☕
