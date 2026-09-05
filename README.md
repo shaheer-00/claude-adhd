@@ -2,7 +2,7 @@
 
 > ⚠️ **This plugin is in test mode** — under active development and testing. Expect rough edges, and back up anything important before relying on it.
 
-A Claude Code plugin for ADHD brains. It remembers the things you said but never finished — tasks, ideas, half-asked questions from past sessions — and brings them back gently.
+A Claude Code plugin for ADHD brains — yours, not the model's. The forgetting it targets happens *between* sessions, after the context is already gone. It remembers the things you said but never finished — tasks, ideas, half-asked questions from past sessions — and brings them back gently.
 
 ## The capture question
 
