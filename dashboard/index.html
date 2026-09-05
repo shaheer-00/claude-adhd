@@ -30,7 +30,7 @@
     --ease: cubic-bezier(.16,1,.3,1);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html { color-scheme: dark; }
+  html { color-scheme: dark; scroll-behavior: smooth; }
   body {
     background:
       radial-gradient(1100px 600px at 88% -12%, rgba(91,140,255,.085), transparent 62%),
@@ -363,6 +363,7 @@
   .rem .btns button.del.confirm { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
 
   @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
     *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
   }
 </style>
