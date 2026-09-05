@@ -83,6 +83,8 @@ Tag tasks when capturing (`--energy low|high`, or the dashboard's edit panel). T
 
 Start a session (or run `node scripts/server.mjs`) and open **http://127.0.0.1:37987**:
 
+![Dashboard — reminders, stats and charts](docs/dashboard-reminders.png)
+
 - projects list, current project, finished-vs-open stats, day streak, this-week summary
 - 14-day completion/added graphs (inline SVG, no CDN)
 - reminders panel: add/edit/handled/delete
@@ -135,6 +137,10 @@ node scripts/mark.mjs list             # see what's open
 node scripts/remind.mjs list           # see active reminders
 node scripts/server.mjs                # dashboard (http://127.0.0.1:37987)
 ```
+
+## Feedback
+
+This plugin is in test mode — feedback shapes what gets built next. Leave your thoughts (what helps, what's annoying, what's missing) on the [Reddit discussion](https://www.reddit.com/r/ClaudeAI/comments/1w7tb2v/i_built_a_claude_code_plugin_for_my_adhd_brain_it/) or open an issue.
 
 ## Support
 
