@@ -45,6 +45,7 @@
   /* film grain — one fixed layer, never in scroll containers */
   body::after {
     content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .5;
+    transform: translateZ(0); /* own compositor layer — no per-scroll-frame blending */
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.028 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
   }
   .wrap { position: relative; z-index: 1; max-width: none; margin: 0; padding: 26px 30px 64px; }
@@ -136,6 +137,7 @@
     background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
     padding: 16px; box-shadow: var(--shadow);
     animation: fadeUp .55s var(--ease) .12s backwards;
+    content-visibility: auto; contain-intrinsic-size: auto 320px;
   }
   .main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
   .main > .panel { animation-delay: .18s; }
@@ -589,14 +591,18 @@ async function refresh() {
     lastSync = Date.now();
     $('live').classList.remove('off');
     $('live-txt').textContent = 'live';
-    const sig = JSON.stringify([state.items, state.projects, state.reminders, state.claudemem?.available]);
+    // Cheap signature (ids + status + stamps) — never re-stringify full text.
+    const sig = (state.items || []).map((i) => `${i.id}:${i.status}:${i.timestamp}:${i.editedAt || 0}:${i.energy || ''}`).join('|')
+      + '#' + (state.projects || []).map((p) => `${p.name}:${p.open}:${p.done}`).join('|')
+      + '#' + (state.reminders || []).map((r) => `${r.id}:${r.done}:${r.dueAt || 0}`).join('|')
+      + '#' + (state.focus?.phase || 'off') + (state.focus?.remainingMs ? Math.round(state.focus.remainingMs / 60000) : '')
+      + '#' + (state.claudemem?.available ? (state.claudemem.projects || []).length : 0);
     if (sig !== lastRenderSig) { lastRenderSig = sig; render(); }
   } catch {
     $('live').classList.add('off');
     $('live-txt').textContent = 'offline';
   }
   updateSyncAge();
-  setInterval(updateSyncAge, 5000);
 }
 function updateSyncAge() {
   if (!lastSync) return;
@@ -1048,6 +1054,7 @@ function renderClaudeMem() {
 /* ---------- boot ---------- */
 refresh();
 setInterval(refresh, 3000);
+setInterval(updateSyncAge, 5000); // one interval, not one per refresh
 </script>
 </body>
 </html>
