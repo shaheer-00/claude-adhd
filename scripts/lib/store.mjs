@@ -90,10 +90,17 @@ export function openItems(items, config, now = Date.now()) {
 }
 
 // Most stale first (oldest timestamp at top) for the session digest.
-export function digestItems(items, config, now = Date.now(), limit = 3) {
-  return eligibleItems(items, config, now)
-    .sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0))
-    .slice(0, limit);
+// When a current project is known, prefer its threads (a digest about
+// some other project is noise); fall back to everything if it has none.
+export function digestItems(items, config, now = Date.now(), limit = 3, project = null) {
+  const sorted = eligibleItems(items, config, now).sort(
+    (a, b) => (a.timestamp || 0) - (b.timestamp || 0)
+  );
+  if (project) {
+    const mine = sorted.filter((i) => itemProject(i) === project);
+    if (mine.length) return mine.slice(0, limit);
+  }
+  return sorted.slice(0, limit);
 }
 
 export function markReminded(idx, id, now = Date.now()) {

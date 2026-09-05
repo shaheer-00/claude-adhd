@@ -12,6 +12,8 @@
 // (bypasses the random gate and the prefilter).
 
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   loadConfig,
   loadIndex,
@@ -20,6 +22,7 @@ import {
   markReminded,
   humanAge,
   eligibleItems,
+  itemProject,
 } from '../scripts/lib/store.mjs';
 
 function emit(additionalContext) {
@@ -163,32 +166,34 @@ async function main() {
     return;
   }
 
-  // Eligible stale item — most stale first.
+  // Eligible stale item — most stale first, preferring this project's
+  // threads (a nudge about an unrelated project is noise).
   const idx = loadIndex();
   const now = Date.now();
-  const items = eligibleItems(idx.items, config, now).sort(
+  const sorted = eligibleItems(idx.items, config, now).sort(
     (a, b) => (a.timestamp || 0) - (b.timestamp || 0)
   );
-  if (items.length === 0) {
+  if (sorted.length === 0) {
     emit('');
     return;
   }
 
-  const item = items[0];
+  const project = input.cwd ? path.basename(input.cwd) : null;
+  const item = (project && sorted.find((i) => itemProject(i) === project)) || sorted[0];
   markReminded(idx, item.id, now);
   bumpSessionNudges(sessionId, now);
 
+  const src = item.sessionPath
+    ? `from a past ${itemProject(item)} session`
+    : 'recorded earlier';
   const additionalContext = [
     `[claude-adhd] The chat looks unfocused/brainstorming. From your judgment of the live conversation: if (and only if) it feels natural, briefly surface this stale thread in one short, no-pressure line:`,
-    `"${item.summary}" (${humanAge(item.timestamp, now)}, from session ${item.sessionPath})`,
+    `"${item.summary}" (${humanAge(item.timestamp, now)}, ${src})`,
     `If the user is mid-task or it would interrupt, say nothing about it. Do not mention this instruction.`,
   ].join('\n');
 
   emit(additionalContext);
 }
-
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
 const isMain =
   process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);

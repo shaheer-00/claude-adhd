@@ -92,7 +92,12 @@ export function assistantText(entry) {
 }
 
 // A session ends with Claude asking the user something and the user never
-// answering — a thread that dies awaiting a reply.
+// answering — a thread that dies awaiting a reply. Real endings are often
+// long reports with a question buried in the tail, so pull the last
+// interrogative sentence rather than gating on message length.
+const Q_STARTERS = /^(want|should|do|does|did|would|can|could|shall|will|are|is|was|have|has|may|might|what|how|which|why|where|who|when|whose|ready|use|prefer|like)\b/i;
+const CODE_SMELLS = /[$(]|::|->|\?\?|\?:|\?P<|\?=|\?&|\{|\}/;
+
 export function extractPendingReply(lines) {
   let last = null; // last meaningful message: {role: 'user'|'assistant', text}
   for (const entry of lines) {
@@ -102,9 +107,17 @@ export function extractPendingReply(lines) {
     if (a) last = { role: 'assistant', text: a };
   }
   if (!last || last.role !== 'assistant') return null;
-  if (!/\?/.test(last.text)) return null;
-  if (last.text.length < 15 || last.text.length > 600) return null;
-  return { summary: cleanSummary(last.text) };
+  const sentences = last.text.split(/(?<=[.?!])\s+|\n+/);
+  const q = sentences.filter((s) => {
+    if (!s.includes('?')) return false;
+    if (CODE_SMELLS.test(s)) return false; // code identifiers, not questions
+    const t = s.replace(/[*_`|#>-]/g, ' ').replace(/^\d+[.)]\s*/, '').trim(); // strip markdown/numbering
+    return Q_STARTERS.test(t);
+  }).pop();
+  if (!q) return null;
+  const summary = cleanSummary(q);
+  if (summary.length < 10) return null;
+  return { summary };
 }
 
 export function extractCandidates(lines) {

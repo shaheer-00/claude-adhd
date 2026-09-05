@@ -9,6 +9,9 @@
 //
 // Env overrides (for tests): ADHD_DIR, ADHD_PROJECTS_DIR, ADHD_FORCE_DIGEST.
 
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { runIndex } from '../scripts/indexer.mjs';
 import {
   loadConfig,
@@ -79,9 +82,26 @@ async function main() {
     return;
   }
 
+  // Current project (from cwd) — digest prefers this project's threads.
+  let project = null;
+  let sessionId = null;
+  try {
+    const raw = fs.readFileSync(0, 'utf8');
+    const input = JSON.parse(raw);
+    if (input.cwd) project = path.basename(input.cwd);
+    if (input.session_id) sessionId = input.session_id;
+  } catch {
+    /* no/invalid stdin — global digest */
+  }
+
   const idx = loadIndex();
   const now = Date.now();
-  const items = digestItems(idx.items, config, now, 3);
+  // The digest is about *past* sessions — drop anything extracted from
+  // the session that is starting right now.
+  const pastItems = sessionId
+    ? idx.items.filter((i) => !i.sessionPath || !i.sessionPath.includes(sessionId))
+    : idx.items;
+  const items = digestItems(pastItems, config, now, 3, project);
 
   if (items.length === 0) {
     emit('');
@@ -118,11 +138,7 @@ async function main() {
   emit(additionalContext);
 }
 
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-
-const isMain =
-  process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
   main().catch(() => emit(''));
 }
