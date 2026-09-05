@@ -2,17 +2,29 @@
 
 > ⚠️ **This plugin is in test mode** — under active development and testing. Expect rough edges, and back up anything important before relying on it.
 
-A Claude Code plugin for ADHD brains. It remembers the things you said but never finished — tasks, ideas, half-asked questions from past sessions — and brings them back gently:
+A Claude Code plugin for ADHD brains. It remembers the things you said but never finished — tasks, ideas, half-asked questions from past sessions — and brings them back gently.
+
+## The capture question
+
+Reminding is only as good as capture — if the forgotten work never landed anywhere, no reminder can find it. This plugin captures on two layers, so it catches things you never marked anywhere:
+
+1. **Live capture** — while you work, Claude silently records tasks the moment you commit to them ("I'll deal with that after the release" counts, it doesn't have to sound like a todo) and marks them done when finished. Judgment happens in-context, not by keyword matching.
+2. **Transcript backstop** — a local indexer scans your past session transcripts for the things people actually say: "I'll X later", "we should try", "what if we", "remind me to", TODO markers, unanswered questions, and sessions that died on a question you never answered. Even if the live layer misses something, the backstop picks it up from the record of the conversation.
+
+The honest limits: a commitment you never expressed in any form can't be caught, and the live layer errs toward not recording (questions and brainstorming are deliberately excluded, so the index doesn't fill with noise).
+
+Everything it captures can be surfaced:
 
 - **Session digest** — when you start a session, it quietly surfaces the 1–3 most stale open threads, flags anything aging (2+ weeks), and notes what you finished since last visit.
 - **Random nudges** — when your chat drifts into brainstorming or boredom, it occasionally drops a one-line "btw, you left this open" — never pushy, never more than twice per session.
-- **Live capture** — when you commit to a task mid-chat, Claude silently records it, and marks it done when finished. No more "wait, what did we decide yesterday?"
+- **`/remind-me`** — on demand: "what did I forget?" gets you a ranked list of open threads, and you can resume one, mark it done, or dismiss it forever.
+
+Plus the tools around it:
+
 - **Custom reminders** — tell Claude "remind me tomorrow at 3pm to check the deploy", "every session remind me to run tests first", or "occasionally remind me to stretch" — they surface naturally in the conversation when due. Also `/remind`.
 - **Focus mode** — `/focus 25 [task]`: timed focus session. The plugin redirects you when the chat drifts, and wraps up with a summary when time's up.
 - **Energy-aware** — tag tasks low/high energy. Say "I'm fried" and it only offers low-effort tasks.
-- **Unanswered follow-ups** — sessions that ended on a question you never answered get surfaced: "you never replied to..."
 - **Dashboard** — a local web page (auto-started on session start) with projects, stats, graphs, day streak, reminders, energy tags, and mark done/dismiss/resume buttons.
-- **`/remind-me`** — on demand: "what did I forget?" gets you a ranked list of open threads, and you can resume one, mark it done, or dismiss it forever.
 
 ## Install
 
@@ -23,7 +35,7 @@ A Claude Code plugin for ADHD brains. It remembers the things you said but never
 
 Requires Claude Code and Node.js. Nothing else — no dependencies, no API keys.
 
-## How it works
+## How surfacing works
 
 ```
 ~/.claude/projects/**/*.jsonl   (your session transcripts, read-only)
@@ -38,7 +50,7 @@ Requires Claude Code and Node.js. Nothing else — no dependencies, no API keys.
   hooks → context injection → Claude decides when/how to surface them
 ```
 
-Two layers, deliberately: **cheap scripts for recall, the model for judgment.** The scripts only extract candidates and enforce anti-nag rules (3-day per-item cooldown, max 2 nudges per session). Claude reads the live conversation and only speaks up when it actually fits.
+Cheap scripts for recall and anti-nag rules (3-day per-item cooldown, max 2 nudges per session); the model for judgment. Claude reads the live conversation and only speaks up when it actually fits.
 
 ## Reminders
 
