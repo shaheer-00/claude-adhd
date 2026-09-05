@@ -268,6 +268,48 @@ const agingDigest = JSON.parse(
 ).hookSpecificOutput.additionalContext;
 check('aging items flagged in digest', /aging, \d+ (days|weeks) ago/.test(agingDigest));
 
+// --- 12. prose-mode extraction ---
+const prose = await import(pathToFileURL(path.join(root, 'scripts', 'prose.mjs')));
+const sampleDoc = fs.readFileSync(path.join(fixtures, 'sample-docs.md'), 'utf8');
+const proseCands = prose.extractProseCandidates(sampleDoc);
+check(
+  'prose: unchecked checkbox extracted',
+  proseCands.some((c) => /Add dark mode toggle/.test(c.summary))
+);
+check(
+  'prose: checked checkbox ignored',
+  !proseCands.some((c) => /Ship the landing page/.test(c.summary))
+);
+check('prose: "next steps" heading extracted', proseCands.some((c) => /Next steps/i.test(c.summary)));
+check('prose: "we should add" extracted', proseCands.some((c) => /RSS feed/.test(c.summary)));
+check('prose: "eventually" extracted', proseCands.some((c) => /image CDNs/.test(c.summary)));
+check(
+  'prose: fenced code block skipped',
+  !proseCands.some((c) => /ignore fenced code blocks/.test(c.summary)) &&
+    !proseCands.some((c) => /inside a code fence/.test(c.summary))
+);
+check(
+  'prose: completion prose not extracted',
+  !proseCands.some((c) => /auth flow was migrated/.test(c.summary)) &&
+    !proseCands.some((c) => /contact form works now/.test(c.summary))
+);
+const fakeCommits = [
+  { hash: 'aaa1111', date: '2026-08-30', subject: 'feat: add dark mode toggle' },
+  { hash: 'bbb2222', date: '2026-08-31', subject: 'chore: bump dependencies' },
+];
+check(
+  'prose: commit match on verb + term overlap',
+  prose.bestCommit('Add dark mode toggle', fakeCommits)?.hash === 'aaa1111'
+);
+check(
+  'prose: no match without term overlap',
+  prose.bestCommit('Add dark mode toggle', [fakeCommits[1]]) === null
+);
+check(
+  'prose: no match for non-completion subject',
+  prose.bestCommit('Add dark mode toggle', [{ hash: 'c', date: 'd', subject: 'revert previous change to dark mode toggle' }]) === null
+);
+
 // --- cleanup ---
 fs.rmSync(projDir, { recursive: true, force: true });
 fs.rmSync(dirA, { recursive: true, force: true });

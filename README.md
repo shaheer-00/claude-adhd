@@ -145,6 +145,7 @@ Everything stays on your machine. The scripts read your local Claude Code transc
 ```bash
 node fixtures/run-tests.mjs            # full test suite (fixture transcripts, throwaway dirs)
 node scripts/indexer.mjs               # scan transcripts → index
+node scripts/prose.mjs <repo>          # eval harness: extract future intent from a repo's docs + git log
 node scripts/mark.mjs list             # see what's open
 node scripts/remind.mjs list           # see active reminders
 node scripts/server.mjs                # dashboard (http://127.0.0.1:37987)
