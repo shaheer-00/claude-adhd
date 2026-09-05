@@ -85,7 +85,7 @@ function stateJson() {
   const focus = focusRaw.active
     ? now >= focusRaw.activeUntil
       ? { active: true, phase: 'ended', label: focusRaw.label }
-      : { active: true, phase: 'active', label: focusRaw.label, remainingMs: focusRaw.activeUntil - now, until: focusRaw.activeUntil }
+      : { active: true, phase: 'active', label: focusRaw.label, startedAt: focusRaw.startedAt, remainingMs: focusRaw.activeUntil - now, until: focusRaw.activeUntil }
     : { active: false, phase: 'off' };
 
   return {

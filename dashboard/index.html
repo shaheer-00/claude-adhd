@@ -9,13 +9,13 @@
   /* ============ tokens ============
      Radius system (locked): cards 14px, buttons/inputs 9px, chips pill. */
   :root {
-    --bg: #0a0c11;
-    --panel: rgba(255,255,255,.026);
-    --panel-hover: rgba(255,255,255,.05);
-    --panel-solid: #12151d;
-    --border: rgba(255,255,255,.07);
-    --border-hover: rgba(255,255,255,.14);
-    --text: #e8ebf2;
+    --bg: #07080c;
+    --panel: linear-gradient(180deg, rgba(255,255,255,.038), rgba(255,255,255,.018));
+    --panel-hover: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.03));
+    --panel-solid: #10131b;
+    --border: rgba(255,255,255,.065);
+    --border-hover: rgba(255,255,255,.16);
+    --text: #eceff5;
     --muted: #9aa3b5;
     --faint: #5c6577;
     --accent: #5b8cff;
@@ -26,23 +26,38 @@
     --dismissed: #6b7280;
     --danger: #ff6b6b;
     --danger-soft: rgba(255,107,107,.12);
-    --shadow: 0 8px 32px rgba(0,0,0,.35);
+    --shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 10px 34px rgba(2,4,10,.45), 0 2px 8px rgba(2,4,10,.3);
     --ease: cubic-bezier(.16,1,.3,1);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   html { color-scheme: dark; }
   body {
     background:
-      radial-gradient(900px 500px at 85% -10%, rgba(91,140,255,.07), transparent 60%),
-      radial-gradient(700px 400px at -10% 110%, rgba(62,207,142,.04), transparent 60%),
+      radial-gradient(1100px 600px at 88% -12%, rgba(91,140,255,.085), transparent 62%),
+      radial-gradient(800px 500px at -8% 108%, rgba(62,207,142,.05), transparent 60%),
+      radial-gradient(600px 400px at 55% 118%, rgba(230,180,80,.035), transparent 55%),
       var(--bg);
     color: var(--text);
     font: 14px/1.55 -apple-system, "Segoe UI Variable", "Segoe UI", Roboto, sans-serif;
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: none; margin: 0; padding: 24px 28px 60px; }
+  /* film grain — one fixed layer, never in scroll containers */
+  body::after {
+    content: ""; position: fixed; inset: 0; z-index: 0; pointer-events: none; opacity: .5;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 0.028 0'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+  }
+  .wrap { position: relative; z-index: 1; max-width: none; margin: 0; padding: 26px 30px 64px; }
   .num { font-variant-numeric: tabular-nums; }
+
+  /* browser surfaces — ours, not the default */
+  ::selection { background: rgba(91,140,255,.32); color: #fff; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+  input, select { caret-color: var(--accent); }
+  ::-webkit-scrollbar { width: 11px; height: 11px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #262c3c; border-radius: 6px; border: 3px solid var(--bg); }
+  ::-webkit-scrollbar-thumb:hover { background: #333b50; }
 
   /* ============ header ============ */
   header { display: flex; align-items: center; gap: 12px; margin-bottom: 22px; flex-wrap: wrap; }
@@ -67,11 +82,14 @@
   .live.off .dot::after { animation: none; }
   .sync { font-size: 11.5px; color: var(--faint); margin-left: auto; }
   .focus-pill {
-    display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 600;
     color: #a8c0ff; background: var(--accent-soft); border: 1px solid rgba(91,140,255,.4);
-    border-radius: 999px; padding: 4px 12px;
+    border-radius: 999px; padding: 4px 13px 4px 7px;
     animation: pillIn .5s var(--ease);
   }
+  .focus-pill .ring { flex-shrink: 0; transform: rotate(-90deg); }
+  .focus-pill .ring .track { stroke: rgba(91,140,255,.22); }
+  .focus-pill .ring .fill { stroke: var(--accent); transition: stroke-dashoffset .8s var(--ease); }
   @keyframes pillIn { from { opacity: 0; transform: scale(.85); } to { opacity: 1; transform: none; } }
   .tag.energy { color: var(--open); border-color: rgba(230,180,80,.35); }
   .tag.energy.high { color: #ff9d6b; border-color: rgba(255,157,107,.35); }
@@ -81,34 +99,42 @@
   }
 
   /* ============ stats ============ */
-  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 16px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 12px; margin-bottom: 16px; }
   .card {
     background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
     padding: 16px 16px 14px; position: relative; overflow: hidden;
-    transition: border-color .3s var(--ease), transform .3s var(--ease), background .3s var(--ease);
+    box-shadow: var(--shadow);
+    transition: border-color .35s var(--ease), transform .35s var(--ease), box-shadow .35s var(--ease);
     animation: fadeUp .5s var(--ease) backwards;
   }
   .card:nth-child(2) { animation-delay: .05s; } .card:nth-child(3) { animation-delay: .1s; }
   .card:nth-child(4) { animation-delay: .15s; } .card:nth-child(5) { animation-delay: .2s; }
-  .card:hover { border-color: var(--border-hover); background: var(--panel-hover); transform: translateY(-2px); }
-  .card::before {
-    content: ""; position: absolute; inset: 0 0 auto; height: 2px; opacity: 0;
-    background: linear-gradient(90deg, transparent, var(--accent), transparent);
-    transition: opacity .3s var(--ease);
+  .card:nth-child(6) { animation-delay: .25s; }
+  .card:hover {
+    border-color: var(--border-hover); transform: translateY(-2px);
+    box-shadow: 0 1px 0 rgba(255,255,255,.05) inset, 0 16px 44px rgba(2,4,10,.55), 0 3px 10px rgba(2,4,10,.35);
   }
-  .card:hover::before { opacity: 1; }
-  .card .num { font-size: 27px; font-weight: 700; letter-spacing: -.02em; }
+  .card .num { font-size: 30px; font-weight: 700; letter-spacing: -.03em; line-height: 1.15; }
   .card .lbl { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .07em; margin-top: 2px; }
   .card.open .num { color: var(--open); }
   .card.done .num { color: var(--done); }
   .card.accent .num { color: var(--accent); }
+  .card .card-ic {
+    position: absolute; top: 14px; right: 14px; color: var(--faint); opacity: .55;
+    transition: opacity .3s var(--ease), color .3s var(--ease);
+  }
+  .card:hover .card-ic { opacity: 1; }
+  .card.open:hover .card-ic { color: var(--open); }
+  .card.done:hover .card-ic { color: var(--done); }
+  .card.accent:hover .card-ic { color: var(--accent); }
+  .card .spark { position: absolute; left: 0; right: 0; bottom: 0; height: 26px; opacity: .5; }
 
   /* ============ layout ============ */
   .layout { display: grid; grid-template-columns: 232px 1fr; gap: 14px; align-items: start; }
   .side { position: sticky; top: 20px; display: flex; flex-direction: column; gap: 12px; }
   .panel {
     background: var(--panel); border: 1px solid var(--border); border-radius: 14px;
-    padding: 16px;
+    padding: 16px; box-shadow: var(--shadow);
     animation: fadeUp .55s var(--ease) .12s backwards;
   }
   .main { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
@@ -140,31 +166,31 @@
   .search { position: relative; flex: 1; min-width: 200px; max-width: 380px; }
   .search svg { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); pointer-events: none; }
   .search input {
-    width: 100%; background: var(--panel); border: 1px solid var(--border); color: var(--text);
+    width: 100%; background: var(--panel-solid); border: 1px solid var(--border); color: var(--text);
     border-radius: 9px; padding: 8px 12px 8px 34px; font: inherit; outline: none;
     transition: border-color .25s var(--ease), background .25s var(--ease), box-shadow .25s var(--ease);
   }
   .search input::placeholder { color: var(--faint); }
   .search input:focus {
-    border-color: rgba(91,140,255,.55); background: var(--panel-hover);
+    border-color: rgba(91,140,255,.55);
     box-shadow: 0 0 0 3px rgba(91,140,255,.12);
   }
   .search kbd {
     position: absolute; right: 10px; top: 50%; transform: translateY(-50%);
     font: 10px/1 var(--muted); border: 1px solid var(--border); border-radius: 5px; padding: 3px 5px;
-    color: var(--faint); background: var(--panel); pointer-events: none;
+    color: var(--faint); background: rgba(255,255,255,.04); pointer-events: none;
   }
   .chips { display: flex; gap: 6px; }
   .chip {
-    border: 1px solid var(--border); background: var(--panel); color: var(--muted);
+    border: 1px solid var(--border); background: rgba(255,255,255,.035); color: var(--muted);
     border-radius: 999px; padding: 6px 13px; font: 12.5px inherit; cursor: pointer;
     transition: all .2s var(--ease); font-family: inherit;
   }
   .chip:hover { border-color: var(--border-hover); color: var(--text); }
-  .chip.active { background: var(--accent-soft); border-color: rgba(91,140,255,.45); color: #a8c0ff; }
+  .chip.active { background: var(--accent-soft); border-color: rgba(91,140,255,.5); color: #b3c7ff; box-shadow: 0 1px 0 rgba(91,140,255,.25) inset; }
   .chip .n { font-variant-numeric: tabular-nums; opacity: .7; margin-left: 2px; }
   select {
-    background: var(--panel); border: 1px solid var(--border); color: var(--muted);
+    background: var(--panel-solid); border: 1px solid var(--border); color: var(--muted);
     border-radius: 9px; padding: 7px 10px; font: 12.5px inherit; cursor: pointer; outline: none;
     transition: border-color .2s var(--ease); font-family: inherit;
   }
@@ -174,8 +200,10 @@
   .charts { display: grid; grid-template-columns: 1fr 260px; gap: 14px; }
   .chart-title { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 10px; }
   .chart-panel svg { width: 100%; height: auto; display: block; }
-  .bars rect { transform-origin: bottom; transform: scaleY(0); transition: transform .7s var(--ease); }
+  .bars rect { transform-origin: bottom; transform: scaleY(0); transition: transform .7s var(--ease), opacity .2s var(--ease); cursor: default; }
   .bars.rendered rect { transform: scaleY(1); }
+  .bars rect:hover { opacity: 1 !important; }
+  .donut-ring circle.seg { transition: stroke-dasharray .9s var(--ease); stroke-linecap: round; }
   .legend { display: flex; gap: 14px; font-size: 11px; color: var(--muted); margin-top: 8px; }
   .legend .sw { display: inline-block; width: 9px; height: 9px; border-radius: 3px; margin-right: 5px; vertical-align: -1px; }
   .donut-wrap { display: flex; gap: 14px; align-items: center; }
@@ -191,12 +219,12 @@
   }
   .item:hover { background: var(--panel-hover); border-color: var(--border); }
   .item.entering { animation: fadeUp .45s var(--ease) backwards; }
-  .item::before {
-    content: ""; position: absolute; left: 0; top: 12px; bottom: 12px; width: 3px;
-    border-radius: 3px; background: var(--open); opacity: .8;
+  .item .age { color: var(--faint); font-size: 11.5px; flex-shrink: 0; width: 90px; padding-top: 2px; display: flex; align-items: center; gap: 6px; }
+  .item .age::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+    background: var(--open);
   }
-  .item.done::before { background: var(--done); opacity: .5; }
-  .item .age { color: var(--faint); font-size: 11.5px; flex-shrink: 0; width: 84px; padding-top: 2px; }
+  .item.done .age::before { background: var(--done); }
   .item .sum { flex: 1; min-width: 0; overflow-wrap: break-word; }
   .item.done .sum { color: var(--muted); }
   .item.done .sum .txt { text-decoration: line-through; text-decoration-color: rgba(154,163,181,.6); }
@@ -207,7 +235,7 @@
   .item .proj-tag { color: var(--faint); }
   .btns { display: flex; gap: 6px; flex-shrink: 0; }
   .btns button, .mini-btn {
-    background: var(--panel); color: var(--muted); border: 1px solid var(--border);
+    background: rgba(255,255,255,.045); color: var(--muted); border: 1px solid var(--border);
     border-radius: 8px; padding: 4px 10px; font-size: 12px; cursor: pointer;
     transition: all .18s var(--ease); font-family: inherit; line-height: 1.4;
   }
@@ -227,8 +255,9 @@
   .item-row-wrap.expanded .detail { grid-template-rows: 1fr; visibility: visible; }
   .detail-inner { overflow: hidden; }
   .detail-body {
-    padding: 12px 14px; margin-top: 2px; border: 1px solid var(--border);
-    border-radius: 9px; background: var(--panel);
+    padding: 12px 14px; margin-top: 2px; border: 1px solid rgba(255,255,255,.05);
+    border-radius: 9px; background: rgba(3,5,10,.42);
+    box-shadow: 0 1px 0 rgba(255,255,255,.03) inset;
     display: flex; flex-direction: column; gap: 10px;
   }
   .editrow { display: flex; gap: 8px; }
@@ -355,12 +384,31 @@
   </header>
 
   <div class="stats">
-    <div class="card open"><div class="num" id="s-open">–</div><div class="lbl">Open</div></div>
-    <div class="card done"><div class="num" id="s-done">–</div><div class="lbl">Finished</div></div>
-    <div class="card accent"><div class="num" id="s-pct">–</div><div class="lbl">Finished %</div></div>
-    <div class="card done"><div class="num" id="s-today">–</div><div class="lbl">Done today</div></div>
-    <div class="card"><div class="num" id="s-week">–</div><div class="lbl">Done this week</div></div>
-    <div class="card"><div class="num" id="s-streak">–</div><div class="lbl">Day streak</div></div>
+    <div class="card open">
+      <svg class="card-ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.2" fill="currentColor" stroke="none"/></svg>
+      <div class="num" id="s-open">–</div><div class="lbl">Open</div>
+    </div>
+    <div class="card done">
+      <svg class="card-ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="m5 12.5 4.5 4.5L19 7"/></svg>
+      <div class="num" id="s-done">–</div><div class="lbl">Finished</div>
+    </div>
+    <div class="card accent">
+      <svg class="card-ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M12 3.5a8.5 8.5 0 1 0 8.5 8.5"/><path d="M12 12 17 7"/></svg>
+      <div class="num" id="s-pct">–</div><div class="lbl">Finished %</div>
+    </div>
+    <div class="card done">
+      <svg class="card-ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.5 1.5M17.2 17.2l1.5 1.5M18.7 5.3l-1.5 1.5M6.8 17.2l-1.5 1.5"/></svg>
+      <div class="num" id="s-today">–</div><div class="lbl">Done today</div>
+    </div>
+    <div class="card">
+      <div class="spark" id="week-spark"></div>
+      <svg class="card-ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M4 19V9M9.5 19V5M15 19v-7M20.5 19V8"/></svg>
+      <div class="num" id="s-week">–</div><div class="lbl">Done this week</div>
+    </div>
+    <div class="card">
+      <svg class="card-ic" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.8c1 3-1.2 4.4-2.1 6C8.7 10.8 8.5 12.5 9 14c-1.6-.6-2.5-2-2.6-3.6C4.6 12.4 4.5 15 5.7 17.2 7.4 20.3 11 21.6 14.3 20.5c3.4-1.2 5.3-4.8 4.2-8.2-.8-2.4-2.8-4-4.2-6.1-.9-1.2-1.6-2.2-2.3-3.4z"/></svg>
+      <div class="num" id="s-streak">–</div><div class="lbl">Day streak</div>
+    </div>
   </div>
 
   <div class="toolbar">
@@ -568,6 +616,7 @@ function render() {
   $('c-done').textContent = s.done ? `(${s.done})` : '';
 
   renderFocusPill();
+  renderWeekSpark();
   renderProjects();
   renderCharts(s);
   renderItems();
@@ -580,9 +629,33 @@ function renderFocusPill() {
   const f = state.focus;
   if (!f || !f.active) { pill.classList.add('hidden'); return; }
   pill.classList.remove('hidden');
-  if (f.phase === 'ended') { pill.textContent = '◎ focus ended'; return; }
+  if (f.phase === 'ended') {
+    pill.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="8.5"/><path d="M12 8v4l2.5 2.5"/></svg> focus ended`;
+    return;
+  }
   const min = Math.max(1, Math.round(f.remainingMs / 60000));
-  pill.textContent = `◎ focus · ${min}m${f.label ? ' · ' + f.label : ''}`;
+  const total = Math.max(1, (f.until || Date.now() + f.remainingMs) - (f.startedAt || Date.now()));
+  const ratio = Math.max(0, Math.min(1, f.remainingMs / total));
+  const R = 7.5, C = 2 * Math.PI * R;
+  pill.innerHTML = `
+    <svg class="ring" width="18" height="18" viewBox="0 0 18 18">
+      <circle class="track" cx="9" cy="9" r="${R}" fill="none" stroke-width="2.5"/>
+      <circle class="fill" cx="9" cy="9" r="${R}" fill="none" stroke-width="2.5" stroke-linecap="round"
+        stroke-dasharray="${C}" stroke-dashoffset="${C * (1 - ratio)}"/>
+    </svg>
+    focus · ${min}m${f.label ? ' · ' + esc(f.label) : ''}`;
+}
+
+function renderWeekSpark() {
+  const data = (state.last14 || []).slice(-7).map((d) => d.done);
+  if (!data.length) return;
+  const W = 200, H = 26;
+  const max = Math.max(1, ...data);
+  const pts = data.map((v, i) => `${(i / (data.length - 1)) * W},${H - 3 - (v / max) * (H - 7)}`);
+  $('week-spark').innerHTML = `<svg viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="width:100%;height:100%;display:block">
+    <polyline points="${pts.join(' ')}" fill="none" stroke="var(--done)" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" opacity=".85"/>
+    <circle cx="${pts[pts.length - 1].split(',')[0]}" cy="${pts[pts.length - 1].split(',')[1]}" r="2.2" fill="var(--done)"/>
+  </svg>`;
 }
 
 function renderProjects() {
@@ -887,20 +960,31 @@ function renderCharts(s) {
 }
 
 function drawDaysChart(data) {
-  const W = 640, H = 140, pad = 24, bw = Math.max(4, (W - pad * 2) / Math.max(1, data.length) - 4);
+  const W = 640, H = 148, pad = 26, bw = Math.max(5, (W - pad * 2) / Math.max(1, data.length) - 5);
   const max = Math.max(2, ...data.map((d) => Math.max(d.done, d.added)));
-  const y = (v) => H - 20 - (v / max) * (H - 40);
-  let bars = '', labels = '';
+  const y = (v) => H - 22 - (v / max) * (H - 44);
+  let bars = '', labels = '', grid = '';
+  for (let g = 1; g <= 3; g++) {
+    grid += `<line x1="${pad - 8}" y1="${y(max * g / 3)}" x2="${W - pad + 6}" y2="${y(max * g / 3)}" stroke="rgba(255,255,255,.05)" stroke-dasharray="2 5"/>
+      <text x="${pad - 11}" y="${y(max * g / 3) + 3}" fill="var(--faint)" font-size="8.5" text-anchor="end">${Math.round(max * g / 3)}</text>`;
+  }
   data.forEach((d, i) => {
     const x = pad + (i * (W - pad * 2)) / Math.max(1, data.length);
-    bars += `<rect x="${x}" y="${y(d.added)}" width="${bw}" height="${Math.max(1, H - 20 - y(d.added))}" fill="var(--open)" opacity=".5" rx="2" style="transition-delay:${i * 22}ms"/>`;
-    bars += `<rect x="${x}" y="${y(d.done)}" width="${bw}" height="${Math.max(1, H - 20 - y(d.done))}" fill="var(--done)" rx="2" style="transition-delay:${i * 22 + 60}ms"/>`;
-    if (i % 3 === 0) labels += `<text x="${x + bw / 2}" y="${H - 4}" fill="var(--faint)" font-size="9" text-anchor="middle">${d.date.slice(5)}</text>`;
+    const t = new Date(d.date).toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+    bars += `<rect x="${x}" y="${y(d.added)}" width="${bw}" height="${Math.max(2, H - 22 - y(d.added))}" fill="url(#gAdded)" opacity=".62" rx="3" style="transition-delay:${i * 24}ms"><title>${t} — added ${d.added}</title></rect>`;
+    bars += `<rect x="${x}" y="${y(d.done)}" width="${bw}" height="${Math.max(2, H - 22 - y(d.done))}" fill="url(#gDone)" rx="3" style="transition-delay:${i * 24 + 70}ms"><title>${t} — finished ${d.done}</title></rect>`;
+    if (i % 3 === 0) labels += `<text x="${x + bw / 2}" y="${H - 6}" fill="var(--faint)" font-size="9" text-anchor="middle">${d.date.slice(5)}</text>`;
   });
   $('chart-days').innerHTML = `<svg viewBox="0 0 ${W} ${H}">
-    <line x1="${pad - 6}" y1="${y(max)}" x2="${W - pad}" y2="${y(max)}" stroke="var(--border)" stroke-dasharray="3 3"/>
-    <text x="4" y="${y(max) + 3}" fill="var(--faint)" font-size="9">${max}</text>
-    <g class="bars">${bars}</g>${labels}</svg>`;
+    <defs>
+      <linearGradient id="gAdded" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#f0c878"/><stop offset="1" stop-color="#8a6a2e"/>
+      </linearGradient>
+      <linearGradient id="gDone" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#5ee3a4"/><stop offset="1" stop-color="#1d7a52"/>
+      </linearGradient>
+    </defs>
+    ${grid}<g class="bars">${bars}</g>${labels}</svg>`;
   requestAnimationFrame(() => requestAnimationFrame(() => {
     const g = $('chart-days').querySelector('.bars');
     if (g) g.classList.add('rendered');
@@ -915,21 +999,29 @@ function drawStatusChart(s) {
     { v: s.dismissed, c: 'var(--dismissed)', l: 'dismissed' },
   ];
   const R = 52, C = 2 * Math.PI * R;
-  let off = 0, arcs = '', legend = '';
+  let off = 0, segs = '', legend = '';
   for (const p of parts) {
     if (p.v <= 0) continue;
     const frac = p.v / total;
-    arcs += `<circle r="${R}" cx="64" cy="64" fill="none" stroke="${p.c}" stroke-width="15"
-      stroke-dasharray="${frac * C} ${C}" stroke-dashoffset="${-off * C}" transform="rotate(-90 64 64)" stroke-linecap="butt"/>`;
+    // round caps overshoot; keep a small breathing gap between segments
+    const arc = Math.max(0.001, frac - 0.015) * C;
+    segs += `<circle class="seg" r="${R}" cx="64" cy="64" fill="none" stroke="${p.c}" stroke-width="14"
+      stroke-dasharray="0 ${C}" data-final="${arc} ${C - arc}" stroke-dashoffset="${-off * C}" transform="rotate(-90 64 64)"/>`;
     legend += `<div style="display:flex;justify-content:space-between;font-size:12px;margin:3px 0">
       <span><span style="display:inline-block;width:9px;height:9px;border-radius:3px;background:${p.c};margin-right:7px"></span>${p.l}</span>
       <span class="num" style="color:var(--muted)">${p.v}</span></div>`;
     off += frac;
   }
-  $('chart-status').innerHTML = `<svg viewBox="0 0 128 128" width="128">${arcs}
-    <text x="64" y="68" fill="var(--text)" font-size="17" font-weight="700" text-anchor="middle">${s.finishedPct}%</text>
+  $('chart-status').innerHTML = `<div class="donut-ring"><svg viewBox="0 0 128 128" width="128">
+    <circle r="${R}" cx="64" cy="64" fill="none" stroke="rgba(255,255,255,.045)" stroke-width="14"/>${segs}
+    <text x="64" y="67" fill="var(--text)" font-size="17" font-weight="700" text-anchor="middle">${s.finishedPct}%</text>
     <text x="64" y="82" fill="var(--faint)" font-size="8" text-anchor="middle" letter-spacing="1">FINISHED</text></svg>
-    <div style="overflow:hidden;padding:6px 0 0 8px;min-width:0">${legend}</div>`;
+    <div style="overflow:hidden;padding:6px 0 0 8px;min-width:0">${legend}</div></div>`;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    $('chart-status').querySelectorAll('.seg').forEach((c) => {
+      c.setAttribute('stroke-dasharray', c.dataset.final);
+    });
+  }));
 }
 
 /* ---------- claude-mem ---------- */
