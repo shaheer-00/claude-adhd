@@ -310,7 +310,41 @@ check(
   prose.bestCommit('Add dark mode toggle', [{ hash: 'c', date: 'd', subject: 'revert previous change to dark mode toggle' }]) === null
 );
 
+// --- 13. dashboard CSRF protection ---
+const dirH = fs.mkdtempSync(path.join(os.tmpdir(), 'adhd-csrf-'));
+process.env.ADHD_DIR = dirH;
+process.env.ADHD_PROJECTS_DIR = projDir; // reuse fixture projects (projDir may be rm'd below only at cleanup)
+const server = await import(pathToFileURL(path.join(root, 'scripts', 'server.mjs')));
+const { port: srvPort } = await server.startServer(0);
+const post = (path, body, headers) =>
+  fetch(`http://127.0.0.1:${srvPort}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...headers },
+    body: JSON.stringify(body),
+  }).then((r) => r.status);
+// seed one reminder to mutate against
+const remAdd = await post('/api/reminders/add', { message: 'csrf probe', dueAt: Date.now() + 86400000 });
+check('same-origin (no Origin header) POST still allowed', remAdd === 200);
+check(
+  'forged cross-origin Origin rejected 403',
+  (await post('/api/reminders/done', { id: 'x' }, { Origin: 'http://evil.example' })) === 403
+);
+check(
+  'localhost Origin allowed',
+  (await post('/api/mark', { id: 'x', status: 'done' }, { Origin: `http://localhost:${srvPort}` })) === 404
+);
+check(
+  'non-JSON Content-Type rejected 415',
+  (await post('/api/add', { summary: 'form attack' }, { 'Content-Type': 'text/plain' })) === 415
+);
+check(
+  'form-encoded POST rejected 415',
+  (await post('/api/reminders/delete', { id: 'x' }, { 'Content-Type': 'application/x-www-form-urlencoded' })) === 415
+);
+check('GET /api/state unaffected', (await fetch(`http://127.0.0.1:${srvPort}/api/state`)).status === 200);
+
 // --- cleanup ---
+fs.rmSync(dirH, { recursive: true, force: true });
 fs.rmSync(projDir, { recursive: true, force: true });
 fs.rmSync(dirA, { recursive: true, force: true });
 fs.rmSync(dirB, { recursive: true, force: true });

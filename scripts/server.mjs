@@ -7,6 +7,11 @@
 // Started automatically (detached) by the SessionStart hook; safe to
 // run manually:  node server.mjs
 //
+// CSRF hardening: state-changing POSTs are rejected unless the Origin
+// header (when present) matches the dashboard's own origin, and the
+// Content-Type is application/json. Requests with no Origin header
+// (curl, CLI scripts) are still allowed.
+//
 // Routes:
 //   GET  /            dashboard page
 //   GET  /api/ping    health check
@@ -134,9 +139,37 @@ function send(res, code, body, type = 'application/json') {
   res.end(body);
 }
 
+// Cross-origin POST from a malicious page can mutate reminders (CSRF:
+// the request is sent by the browser from this machine, so the
+// loopback bind does not help). Reject requests whose Origin header
+// is present but is not the dashboard's own origin. No Origin header
+// = non-browser client (curl, CLI scripts), still allowed.
+function allowedOrigin(req, port) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  return origin === `http://127.0.0.1:${port}` || origin === `http://localhost:${port}`;
+}
+
+// Guard for all state-changing routes. Returns true (and sends an
+// error response) when the request must be rejected.
+function rejectMutation(req, res, port) {
+  if (!allowedOrigin(req, port)) {
+    send(res, 403, JSON.stringify({ error: 'cross-origin mutation rejected' }));
+    return true;
+  }
+  // CORS-safelisted content types (text/plain from cross-origin
+  // fetch/form posts) skip preflight entirely; require JSON.
+  const ct = (req.headers['content-type'] || '').split(';')[0].trim().toLowerCase();
+  if (ct !== 'application/json') {
+    send(res, 415, JSON.stringify({ error: 'application/json required' }));
+    return true;
+  }
+  return false;
+}
+
 export function startServer(portOverride) {
   const config = loadConfig();
-  const port = Number(portOverride || process.env.ADHD_PORT || config.dashboardPort || 37987);
+  let port = portOverride !== undefined ? Number(portOverride) : Number(process.env.ADHD_PORT || config.dashboardPort || 37987);
 
   const server = http.createServer(async (req, res) => {
     const url = (req.url || '/').split('?')[0];
@@ -156,6 +189,7 @@ export function startServer(portOverride) {
     }
 
     if (url === '/api/mark' && req.method === 'POST') {
+      if (rejectMutation(req, res, port)) return;
       const body = await readBody(req);
       if (!body?.id || !['done', 'dismissed', 'open'].includes(body.status)) {
         return send(res, 400, JSON.stringify({ error: 'need id and status done|dismissed|open' }));
@@ -168,6 +202,7 @@ export function startServer(portOverride) {
     }
 
     if (url === '/api/add' && req.method === 'POST') {
+      if (rejectMutation(req, res, port)) return;
       const body = await readBody(req);
       if (!body?.summary) return send(res, 400, JSON.stringify({ error: 'need summary' }));
       const idx = loadIndex();
@@ -181,6 +216,7 @@ export function startServer(portOverride) {
     }
 
     if (url === '/api/update' && req.method === 'POST') {
+      if (rejectMutation(req, res, port)) return;
       const body = await readBody(req);
       if (!body?.id || (!body?.summary && body?.energy === undefined)) {
         return send(res, 400, JSON.stringify({ error: 'need id and summary or energy' }));
@@ -196,6 +232,7 @@ export function startServer(portOverride) {
     }
 
     if (url === '/api/reminders/add' && req.method === 'POST') {
+      if (rejectMutation(req, res, port)) return;
       const body = await readBody(req);
       if (!body?.message) return send(res, 400, JSON.stringify({ error: 'need message' }));
       const kind = body.kind === 'recurring' || body.kind === 'random' ? body.kind
@@ -218,6 +255,7 @@ export function startServer(portOverride) {
     }
 
     if (url === '/api/reminders/done' && req.method === 'POST') {
+      if (rejectMutation(req, res, port)) return;
       const body = await readBody(req);
       if (!body?.id) return send(res, 400, JSON.stringify({ error: 'need id' }));
       if (!reminderAction(body.id, 'done')) {
@@ -227,6 +265,7 @@ export function startServer(portOverride) {
     }
 
     if (url === '/api/reminders/delete' && req.method === 'POST') {
+      if (rejectMutation(req, res, port)) return;
       const body = await readBody(req);
       if (!body?.id) return send(res, 400, JSON.stringify({ error: 'need id' }));
       if (!reminderAction(body.id, 'delete')) {
@@ -248,7 +287,10 @@ export function startServer(portOverride) {
   });
 
   return new Promise((resolve) => {
-    server.listen(port, '127.0.0.1', () => resolve({ server, port }));
+    server.listen(port, '127.0.0.1', () => {
+      port = server.address().port;
+      resolve({ server, port });
+    });
   });
 }
 
