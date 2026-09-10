@@ -139,36 +139,36 @@ const store = await import(pathToFileURL(path.join(root, 'scripts', 'lib', 'stor
 remind(['add', 'future once', '--in', '100h']);
 remind(['add', 'past once', '--in', '1s']);
 await new Promise((r) => setTimeout(r, 1100));
-let due = store.collectDueReminders('rem-s1', {}, Date.now());
+let due = await store.collectDueReminders('rem-s1', {}, Date.now());
 check('past-due once reminder fires', due.some((r) => r.message === 'past once'));
 check('future once reminder not due', !due.some((r) => r.message === 'future once'));
-due = store.collectDueReminders('rem-s1', {}, Date.now());
+due = await store.collectDueReminders('rem-s1', {}, Date.now());
 check('once reminder auto-done after firing', !due.some((r) => r.message === 'past once'));
 
 // recurring session: fires on new session only
 remind(['add', 'standup note', '--every', 'session']);
-due = store.collectDueReminders('rem-s1', {}, Date.now());
+due = await store.collectDueReminders('rem-s1', {}, Date.now());
 check('session reminder fires in new session', due.some((r) => r.message === 'standup note'));
-due = store.collectDueReminders('rem-s1', {}, Date.now());
+due = await store.collectDueReminders('rem-s1', {}, Date.now());
 check('session reminder silent within same session', !due.some((r) => r.message === 'standup note'));
-due = store.collectDueReminders('rem-s2', {}, Date.now());
+due = await store.collectDueReminders('rem-s2', {}, Date.now());
 check('session reminder fires again next session', due.some((r) => r.message === 'standup note'));
 
 // recurring day: fires, then cooldown blocks within the day
 remind(['add', 'daily water', '--every', 'day']);
 const nowMs = Date.now();
-due = store.collectDueReminders('rem-s1', {}, nowMs);
+due = await store.collectDueReminders('rem-s1', {}, nowMs);
 check('daily reminder fires when new', due.some((r) => r.message === 'daily water'));
-due = store.collectDueReminders('rem-s1', {}, nowMs + 60 * 60 * 1000);
+due = await store.collectDueReminders('rem-s1', {}, nowMs + 60 * 60 * 1000);
 check('daily reminder cooldown blocks same day', !due.some((r) => r.message === 'daily water'));
-due = store.collectDueReminders('rem-s1', {}, nowMs + 25 * 60 * 60 * 1000);
+due = await store.collectDueReminders('rem-s1', {}, nowMs + 25 * 60 * 60 * 1000);
 check('daily reminder fires next day', due.some((r) => r.message === 'daily water'));
 
 // random: forced fire + cooldown
 remind(['add', 'random zen', '--random']);
-due = store.collectDueReminders('rem-s1', {}, Date.now(), { forceRandom: true });
+due = await store.collectDueReminders('rem-s1', {}, Date.now(), { forceRandom: true });
 check('random reminder fires when forced', due.some((r) => r.message === 'random zen'));
-due = store.collectDueReminders('rem-s1', {}, Date.now(), { forceRandom: true });
+due = await store.collectDueReminders('rem-s1', {}, Date.now(), { forceRandom: true });
 check('random reminder daily cooldown blocks', !due.some((r) => r.message === 'random zen'));
 
 // capture hook injects due reminders
@@ -184,6 +184,12 @@ check('capture instruction mentions remind.mjs', capCtx.includes('remind.mjs'));
 
 // CLI round-trip: done + delete
 const remItems = remList();
+// flag value before message must not be eaten as the message
+remind(['add', '--at', '2030-01-01T00:00', 'at-flag message']);
+check(
+  'reminder --at value not mistaken for message',
+  remList().some((r) => r.message === 'at-flag message')
+);
 const onceId = remItems.find((r) => r.message === 'future once').id;
 remind(['done', onceId]);
 check('reminder done removes from active list', !remList().some((r) => r.id === onceId));
@@ -198,14 +204,14 @@ process.env.ADHD_DIR = dirE; // in-process store reads this too
 const focusCli = (args) => run('scripts/focus.mjs', args, { dir: dirE }).stdout.trim();
 
 focusCli(['start', '25', 'ship it']);
-let fstate = store.focusPhase();
+let fstate = await store.focusPhase();
 check('focus starts active', fstate.phase === 'active' && fstate.label === 'ship it');
 check('focus remaining ~25m', Math.abs(fstate.remainingMs - 25 * 60_000) < 5000);
 // expire by writing past activeUntil
 fs.writeFileSync(path.join(dirE, 'focus.json'), JSON.stringify({ active: true, startedAt: Date.now() - 7e6, activeUntil: Date.now() - 1000, label: 'ship it', wrappedUp: false }));
-fstate = store.focusPhase();
+fstate = await store.focusPhase();
 check('expired focus returns ended once', fstate.phase === 'ended');
-fstate = store.focusPhase();
+fstate = await store.focusPhase();
 check('ended only once, then off', fstate.phase === 'off');
 // capture hook injects active focus
 focusCli(['start', '10', 'stay on task']);
@@ -215,7 +221,7 @@ const focusCtx = JSON.parse(
 check('capture hook injects focus context', focusCtx.includes('[claude-adhd focus] Focus session active'));
 check('focus context has label', focusCtx.includes('stay on task'));
 focusCli(['stop']);
-check('focus stop clears', store.focusPhase().phase === 'off');
+check('focus stop clears', (await store.focusPhase()).phase === 'off');
 
 // --- 8. streak + aging ---
 check('streak counts consecutive done days', store.doneStreak([
@@ -238,6 +244,12 @@ markF(['add', 'big refactor job', '--energy', 'high', '--project', 'P']);
 const lowItems = JSON.parse(markF(['list', '--energy', 'low'])).items;
 check('energy filter returns only low', lowItems.length === 1 && lowItems[0].summary === 'quick README tweak');
 check('energy stored on add', JSON.parse(markF(['list'])).items.find((i) => i.summary === 'big refactor job').energy === 'high');
+// flag value before message must not be eaten as the summary
+markF(['add', '--project', 'flagged', 'flag value kept']);
+check(
+  'flag value not mistaken for summary',
+  JSON.parse(markF(['list', '--all'])).items.some((i) => i.summary === 'flag value kept' && i.project === 'flagged')
+);
 
 // --- 10. pending-reply extraction ---
 const pendingLines = [
@@ -342,6 +354,34 @@ check(
   (await post('/api/reminders/delete', { id: 'x' }, { 'Content-Type': 'application/x-www-form-urlencoded' })) === 415
 );
 check('GET /api/state unaffected', (await fetch(`http://127.0.0.1:${srvPort}/api/state`)).status === 200);
+
+// oversize body -> 413, server stays alive
+const bigBody = JSON.stringify({ summary: 'x'.repeat(20 * 1024) });
+const bigRes = await fetch(`http://127.0.0.1:${srvPort}/api/add`, {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: bigBody,
+}).catch(() => null);
+check('oversize body rejected 413', bigRes !== null && bigRes.status === 413);
+check('server alive after oversize body', (await fetch(`http://127.0.0.1:${srvPort}/api/ping`)).status === 200);
+
+// store failure mid-mutation -> 500, server stays alive (ADHD_DIR points
+// at a plain file, so the store cannot create its files)
+const notADir = path.join(dirH, 'not-a-dir');
+fs.writeFileSync(notADir, 'x');
+process.env.ADHD_DIR = notADir;
+check(
+  'store failure returns 500, not a crash',
+  (await post('/api/add', { summary: 'boom' })) === 500
+);
+process.env.ADHD_DIR = dirH;
+check('server alive after store failure', (await fetch(`http://127.0.0.1:${srvPort}/api/ping`)).status === 200);
+
+// second server on the same port -> EADDRINUSE rejection, not an
+// unhandled crash
+let reused = null;
+await server.startServer(srvPort).catch((e) => { reused = e; });
+check('second server on same port rejects EADDRINUSE', reused !== null && reused.code === 'EADDRINUSE');
 
 // --- cleanup ---
 fs.rmSync(dirH, { recursive: true, force: true });

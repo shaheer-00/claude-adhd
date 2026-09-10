@@ -33,6 +33,16 @@ const flag = (name) => {
   return i >= 0 ? rest[i + 1] : undefined;
 };
 
+const positional = (args) => {
+  const out = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '--at' || a === '--in' || a === '--every' || a === '--project') i++;
+    else if (!a.startsWith('--')) out.push(a);
+  }
+  return out;
+};
+
 // "2h" / "30m" / "1d" / "10s" -> ms
 function parseRelative(v) {
   const m = /^(\d+)\s*([smhd])$/.exec(String(v || '').trim());
@@ -44,7 +54,7 @@ function parseRelative(v) {
 if (!cmd) usage();
 
 if (cmd === 'add') {
-  const message = rest.find((a) => !a.startsWith('--'));
+  const message = positional(rest)[0];
   if (!message) usage();
   const at = flag('at');
   const rel = flag('in');
@@ -79,7 +89,7 @@ if (cmd === 'add') {
     kind = 'random';
   }
 
-  const r = addReminder({ message, kind, dueAt, every: every || null, project });
+  const r = await addReminder({ message, kind, dueAt, every: every || null, project });
   if (!r) {
     console.error('empty or invalid message');
     process.exit(1);
@@ -98,9 +108,9 @@ if (cmd === 'add') {
   const items = all ? loadReminders() : loadReminders().filter((r) => !r.done);
   console.log(JSON.stringify({ items }, null, 2));
 } else if (cmd === 'done' || cmd === 'delete') {
-  const id = rest.find((a) => !a.startsWith('--'));
+  const id = positional(rest)[0];
   if (!id) usage();
-  if (!reminderAction(id, cmd)) {
+  if (!(await reminderAction(id, cmd))) {
     console.error(`no reminder with id ${id}`);
     process.exit(1);
   }

@@ -42,7 +42,25 @@ function emit(additionalContext) {
 // - recent messages are short
 // - topic drift (low word overlap between consecutive user messages)
 export function readTranscriptRecent(transcriptPath, maxEntries = 40) {
-  const raw = fs.readFileSync(transcriptPath, 'utf8');
+  // Tail-read: transcripts can grow to hundreds of MB; only the last
+  // 1MB (≈ recent messages) is ever needed here.
+  const st = fs.statSync(transcriptPath);
+  const MAX = 1024 * 1024;
+  let raw;
+  if (st.size > MAX) {
+    const fd = fs.openSync(transcriptPath, 'r');
+    try {
+      const buf = Buffer.alloc(MAX);
+      fs.readSync(fd, buf, 0, MAX, st.size - MAX);
+      raw = buf.toString('utf8');
+      const nl = raw.indexOf('\n');
+      if (nl >= 0) raw = raw.slice(nl + 1); // drop torn first line
+    } finally {
+      fs.closeSync(fd);
+    }
+  } else {
+    raw = fs.readFileSync(transcriptPath, 'utf8');
+  }
   const lines = raw.split('\n').filter((l) => l.trim());
   const tail = lines.slice(-maxEntries);
   const msgs = [];
@@ -180,8 +198,8 @@ async function main() {
 
   const project = input.cwd ? path.basename(input.cwd) : null;
   const item = (project && sorted.find((i) => itemProject(i) === project)) || sorted[0];
-  markReminded(idx, item.id, now);
-  bumpSessionNudges(sessionId, now);
+  await markReminded(idx, item.id, now);
+  await bumpSessionNudges(sessionId, now);
 
   const src = item.sessionPath
     ? `from a past ${itemProject(item)} session`

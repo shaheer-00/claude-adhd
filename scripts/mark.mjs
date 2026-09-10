@@ -28,6 +28,16 @@ const flag = (name) => {
   return i >= 0 ? rest[i + 1] : undefined;
 };
 
+const positional = (args) => {
+  const out = [];
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
+    if (a === '--project' || a === '--energy') i++;
+    else if (!a.startsWith('--')) out.push(a);
+  }
+  return out;
+};
+
 if (!cmd) usage();
 
 if (cmd === 'list') {
@@ -40,26 +50,26 @@ if (cmd === 'list') {
   items = items.map((i) => ({ ...i, project: itemProject(i) }));
   console.log(JSON.stringify({ items }, null, 2));
 } else if (cmd === 'add') {
-  const summary = rest.find((a) => !a.startsWith('--'));
+  const summary = positional(rest)[0];
   if (!summary) usage();
   const project = flag('project') || process.cwd().split(/[\\/]/).filter(Boolean).pop() || 'unknown';
   const energy = flag('energy');
   if (energy && !['low', 'high'].includes(energy)) usage();
   const idx = loadIndex();
-  const item = addItem(idx, { summary, project, source: 'capture', energy: energy || null });
+  const item = await addItem(idx, { summary, project, source: 'capture', energy: energy || null });
   if (!item) {
     console.error('duplicate or empty summary');
     process.exit(1);
   }
   console.log(JSON.stringify({ ok: true, id: item.id, project: item.project, summary: item.summary }));
 } else if (cmd === 'reindex') {
-  console.log(JSON.stringify(runIndex(false)));
+  console.log(JSON.stringify(await runIndex(false)));
 } else if (cmd === 'done' || cmd === 'dismiss' || cmd === 'open') {
-  const id = rest.find((a) => !a.startsWith('--'));
+  const id = positional(rest)[0];
   if (!id) usage();
   const status = cmd === 'dismiss' ? 'dismissed' : cmd;
   const idx = loadIndex();
-  if (!markStatus(idx, id, status)) {
+  if (!(await markStatus(idx, id, status))) {
     console.error(`no item with id ${id}`);
     process.exit(1);
   }

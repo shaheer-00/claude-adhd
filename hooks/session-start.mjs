@@ -76,7 +76,7 @@ async function main() {
 
   let stats;
   try {
-    stats = runIndex();
+    stats = await runIndex();
   } catch (e) {
     emit('');
     return;
@@ -110,7 +110,7 @@ async function main() {
 
   // The digest counts as a reminder — start the cooldown clock so the
   // prompt-submit nudges don't immediately repeat the same items.
-  for (const it of items) markReminded(idx, it.id, now);
+  for (const it of items) await markReminded(idx, it.id, now);
 
   // Wrap-up: what finished since the previous session (last 36h keeps it
   // to "since you were last here" without reaching back days).

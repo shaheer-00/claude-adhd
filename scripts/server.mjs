@@ -121,15 +121,29 @@ function last13DoneToday(items, now) {
   return items.filter((i) => i.status === 'done' && i.statusChangedAt >= t0).length;
 }
 
-function readBody(req) {
+function readBody(req, res) {
   return new Promise((resolve) => {
     let data = '';
+    let settled = false;
     req.on('data', (c) => {
       data += c;
-      if (data.length > 10000) req.destroy();
+      if (data.length > 10000) {
+        if (!settled) {
+          settled = true;
+          send(res, 413, JSON.stringify({ error: 'body too large' }));
+        }
+        req.destroy();
+      }
     });
     req.on('end', () => {
+      if (settled) return;
       try { resolve(JSON.parse(data)); } catch { resolve(null); }
+    });
+    req.on('error', () => {
+      if (!settled) {
+        settled = true;
+        resolve(null);
+      }
     });
   });
 }
@@ -190,88 +204,112 @@ export function startServer(portOverride) {
 
     if (url === '/api/mark' && req.method === 'POST') {
       if (rejectMutation(req, res, port)) return;
-      const body = await readBody(req);
-      if (!body?.id || !['done', 'dismissed', 'open'].includes(body.status)) {
-        return send(res, 400, JSON.stringify({ error: 'need id and status done|dismissed|open' }));
+      try {
+        const body = await readBody(req, res);
+        if (!body?.id || !['done', 'dismissed', 'open'].includes(body.status)) {
+          return send(res, 400, JSON.stringify({ error: 'need id and status done|dismissed|open' }));
+        }
+        const idx = loadIndex();
+        if (!(await markStatus(idx, body.id, body.status))) {
+          return send(res, 404, JSON.stringify({ error: 'no such item' }));
+        }
+        return send(res, 200, JSON.stringify({ ok: true }));
+      } catch (e) {
+        return send(res, 500, JSON.stringify({ error: 'internal error' }));
       }
-      const idx = loadIndex();
-      if (!markStatus(idx, body.id, body.status)) {
-        return send(res, 404, JSON.stringify({ error: 'no such item' }));
-      }
-      return send(res, 200, JSON.stringify({ ok: true }));
     }
 
     if (url === '/api/add' && req.method === 'POST') {
       if (rejectMutation(req, res, port)) return;
-      const body = await readBody(req);
-      if (!body?.summary) return send(res, 400, JSON.stringify({ error: 'need summary' }));
-      const idx = loadIndex();
-      const item = addItem(idx, {
-        summary: body.summary,
-        project: body.project || 'unknown',
-        source: 'dashboard',
-      });
-      if (!item) return send(res, 409, JSON.stringify({ error: 'duplicate or empty' }));
-      return send(res, 200, JSON.stringify({ ok: true, id: item.id }));
+      try {
+        const body = await readBody(req, res);
+        if (!body?.summary) return send(res, 400, JSON.stringify({ error: 'need summary' }));
+        const idx = loadIndex();
+        const item = await addItem(idx, {
+          summary: body.summary,
+          project: body.project || 'unknown',
+          source: 'dashboard',
+        });
+        if (!item) return send(res, 409, JSON.stringify({ error: 'duplicate or empty' }));
+        return send(res, 200, JSON.stringify({ ok: true, id: item.id }));
+      } catch (e) {
+        return send(res, 500, JSON.stringify({ error: 'internal error' }));
+      }
     }
 
     if (url === '/api/update' && req.method === 'POST') {
       if (rejectMutation(req, res, port)) return;
-      const body = await readBody(req);
-      if (!body?.id || (!body?.summary && body?.energy === undefined)) {
-        return send(res, 400, JSON.stringify({ error: 'need id and summary or energy' }));
+      try {
+        const body = await readBody(req, res);
+        if (!body?.id || (!body?.summary && body?.energy === undefined)) {
+          return send(res, 400, JSON.stringify({ error: 'need id and summary or energy' }));
+        }
+        const idx = loadIndex();
+        const patch = {};
+        if (body.summary !== undefined) patch.summary = body.summary;
+        if (body.energy !== undefined) patch.energy = body.energy;
+        if (!(await updateItem(idx, body.id, patch))) {
+          return send(res, 404, JSON.stringify({ error: 'no such item or empty summary' }));
+        }
+        return send(res, 200, JSON.stringify({ ok: true }));
+      } catch (e) {
+        return send(res, 500, JSON.stringify({ error: 'internal error' }));
       }
-      const idx = loadIndex();
-      const patch = {};
-      if (body.summary !== undefined) patch.summary = body.summary;
-      if (body.energy !== undefined) patch.energy = body.energy;
-      if (!updateItem(idx, body.id, patch)) {
-        return send(res, 404, JSON.stringify({ error: 'no such item or empty summary' }));
-      }
-      return send(res, 200, JSON.stringify({ ok: true }));
     }
 
     if (url === '/api/reminders/add' && req.method === 'POST') {
       if (rejectMutation(req, res, port)) return;
-      const body = await readBody(req);
-      if (!body?.message) return send(res, 400, JSON.stringify({ error: 'need message' }));
-      const kind = body.kind === 'recurring' || body.kind === 'random' ? body.kind
-        : 'once';
-      if (kind === 'recurring' && !['session', 'day'].includes(body.every)) {
-        return send(res, 400, JSON.stringify({ error: 'recurring needs every: session|day' }));
+      try {
+        const body = await readBody(req, res);
+        if (!body?.message) return send(res, 400, JSON.stringify({ error: 'need message' }));
+        const kind = body.kind === 'recurring' || body.kind === 'random' ? body.kind
+          : 'once';
+        if (kind === 'recurring' && !['session', 'day'].includes(body.every)) {
+          return send(res, 400, JSON.stringify({ error: 'recurring needs every: session|day' }));
+        }
+        if (kind === 'once' && !body.dueAt) {
+          return send(res, 400, JSON.stringify({ error: 'once needs dueAt (ms epoch)' }));
+        }
+        const r = await addReminder({
+          message: body.message,
+          kind,
+          dueAt: body.dueAt || null,
+          every: body.every || null,
+          project: body.project || null,
+        });
+        if (!r) return send(res, 400, JSON.stringify({ error: 'invalid message' }));
+        return send(res, 200, JSON.stringify({ ok: true, id: r.id }));
+      } catch (e) {
+        return send(res, 500, JSON.stringify({ error: 'internal error' }));
       }
-      if (kind === 'once' && !body.dueAt) {
-        return send(res, 400, JSON.stringify({ error: 'once needs dueAt (ms epoch)' }));
-      }
-      const r = addReminder({
-        message: body.message,
-        kind,
-        dueAt: body.dueAt || null,
-        every: body.every || null,
-        project: body.project || null,
-      });
-      if (!r) return send(res, 400, JSON.stringify({ error: 'invalid message' }));
-      return send(res, 200, JSON.stringify({ ok: true, id: r.id }));
     }
 
     if (url === '/api/reminders/done' && req.method === 'POST') {
       if (rejectMutation(req, res, port)) return;
-      const body = await readBody(req);
-      if (!body?.id) return send(res, 400, JSON.stringify({ error: 'need id' }));
-      if (!reminderAction(body.id, 'done')) {
-        return send(res, 404, JSON.stringify({ error: 'no such reminder' }));
+      try {
+        const body = await readBody(req, res);
+        if (!body?.id) return send(res, 400, JSON.stringify({ error: 'need id' }));
+        if (!(await reminderAction(body.id, 'done'))) {
+          return send(res, 404, JSON.stringify({ error: 'no such reminder' }));
+        }
+        return send(res, 200, JSON.stringify({ ok: true }));
+      } catch (e) {
+        return send(res, 500, JSON.stringify({ error: 'internal error' }));
       }
-      return send(res, 200, JSON.stringify({ ok: true }));
     }
 
     if (url === '/api/reminders/delete' && req.method === 'POST') {
       if (rejectMutation(req, res, port)) return;
-      const body = await readBody(req);
-      if (!body?.id) return send(res, 400, JSON.stringify({ error: 'need id' }));
-      if (!reminderAction(body.id, 'delete')) {
-        return send(res, 404, JSON.stringify({ error: 'no such reminder' }));
+      try {
+        const body = await readBody(req, res);
+        if (!body?.id) return send(res, 400, JSON.stringify({ error: 'need id' }));
+        if (!(await reminderAction(body.id, 'delete'))) {
+          return send(res, 404, JSON.stringify({ error: 'no such reminder' }));
+        }
+        return send(res, 200, JSON.stringify({ ok: true }));
+      } catch (e) {
+        return send(res, 500, JSON.stringify({ error: 'internal error' }));
       }
-      return send(res, 200, JSON.stringify({ ok: true }));
     }
 
     if (url === '/' || url === '/index.html') {
@@ -286,7 +324,8 @@ export function startServer(portOverride) {
     return send(res, 404, JSON.stringify({ error: 'not found' }));
   });
 
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
+    server.on('error', (e) => reject(e));
     server.listen(port, '127.0.0.1', () => {
       port = server.address().port;
       resolve({ server, port });
@@ -296,7 +335,16 @@ export function startServer(portOverride) {
 
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
-  startServer().then(({ port }) => {
-    console.log(`claude-adhd dashboard: http://127.0.0.1:${port}`);
-  });
+  startServer()
+    .then(({ port }) => {
+      console.log(`claude-adhd dashboard: http://127.0.0.1:${port}`);
+    })
+    .catch((e) => {
+      if (e.code === 'EADDRINUSE') {
+        console.log('claude-adhd dashboard already running');
+        return;
+      }
+      console.error(e.message);
+      process.exit(1);
+    });
 }

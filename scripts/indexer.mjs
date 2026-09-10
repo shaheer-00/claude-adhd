@@ -248,7 +248,7 @@ export function parseSession(full) {
   return lines;
 }
 
-export function runIndex(force = false) {
+export async function runIndex(force = false) {
   const config = loadConfig();
   const idx = loadIndex();
   const transcripts = findTranscripts(config, force);
@@ -318,7 +318,7 @@ export function runIndex(force = false) {
   }
 
   detectCompletions(idx.items, sessionsText, idx);
-  saveIndex(idx);
+  await saveIndex(idx);
 
   return { parsed, added, totalItems: idx.items.length, open: idx.items.filter((i) => i.status === 'open').length };
 }
@@ -330,6 +330,5 @@ function collectTexts(sessionsText, key, texts, ts) {
 const isMain = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
 if (isMain) {
   const force = process.argv.includes('--force');
-  const result = runIndex(force);
-  console.log(JSON.stringify(result));
+  runIndex(force).then((result) => console.log(JSON.stringify(result)));
 }

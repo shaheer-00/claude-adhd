@@ -55,7 +55,9 @@ function readStdin() {
     process.stdin.on('data', (c) => (data += c));
     process.stdin.on('end', () => resolve(data));
     // Hooks always get stdin; guard against a never-closing pipe anyway.
-    setTimeout(() => resolve(data), 500);
+    // unref'd so the fallback timer never keeps the event loop alive.
+    const t = setTimeout(() => resolve(data), 500);
+    t.unref();
   });
 }
 
@@ -74,7 +76,7 @@ async function main() {
     } catch {
       /* treat as no session id */
     }
-    const due = collectDueReminders(input.session_id, config, Date.now());
+    const due = await collectDueReminders(input.session_id, config, Date.now());
     if (due.length) {
       const lines = due.map(
         (r) => `- ${r.message}${r.project ? ` (${r.project})` : ''}`
@@ -87,7 +89,7 @@ async function main() {
   }
 
   if (config.focus !== false && !process.env.ADHD_NO_FOCUS) {
-    const f = focusPhase();
+    const f = await focusPhase();
     if (f.phase === 'active') {
       const end = new Date(f.activeUntil).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
       const left = Math.max(1, Math.round(f.remainingMs / 60_000));
